@@ -66,37 +66,44 @@ class TransposeExecutor:
         self._index = index
         self._num_procs = num_procs
         self._order = order
-        self._block_order = order / num_procs
-        self._ma = np.fromfunction(lambda i, j: self._order * (j + self._index) + i,
+        self._block_order = order // num_procs
+        self._index_start = self._index * self._block_order
+        self._ma = np.fromfunction(lambda i, j: (self._index_start + j) * self._order + i,
                                    (self._order, self._block_order), dtype=np.float)
-        self._mb = np.zeros_like(self._ma)
+        self._mb = np.zeros((self._block_order, self._order), dtype=np.float)
 
     def register_executor(self, handlers):
         self._handlers = handlers
 
     def transpose(self):
-        row_start = self._index * self._block_order
-        self._mb[row_start: self._block_order, :] += self._ma[row_start: self._block_order, :].T
-        self._ma[row_start: self._block_order, :] += 1.0
+        start = self._index_start
+        end = start + self._block_order
+        self._mb[:, start: end] += self._ma[start: end, :].T
+        self._ma[start: end, :] += 1.0
 
         ids = []
         for phases in range(1, self._num_procs):
             to_index = (self._index + phases) % self._num_procs
             assert to_index != self._index
-            row_start = to_index * self._block_order
-            work_out = self._ma[row_start: self._block_order, :].copy()
+            start = to_index * self._block_order
+            end = start + self._block_order
+            work_out = self._ma[start: end, :].copy()
             ids.append(self._handlers[to_index].receive.remote(self._index, work_out.T))
-            self._ma[row_start: self._block_order, :] += 1.0
+            self._ma[start: end, :] += 1.0
 
-        ray.get(ids)
+        return ids
 
     def receive(self, from_index, data):
-        row_start = from_index * self._block_order
-        self._mb[row_start: self._block_order, :] += data
+        col_start = from_index * self._block_order
+        col_end = col_start + self._block_order
+        self._mb[:, col_start: col_end] += data
+
+    def get_matrix(self):
+        return self._ma, self._mb
 
     def abserr(self, iterations):
-        A = np.fromfunction(lambda i, j: self._order * (i + self._index) + j,
-                            (self._order, self._block_order), dtype=np.float)
+        A = np.fromfunction(lambda i, j: (i + self._index_start) * self._order + j,
+                            (self._block_order, self._order), dtype=np.float)
         A = A * (iterations + 1.0) + (iterations + 1.0) * iterations / 2.0
         abserr = np.linalg.norm(np.reshape(self._mb - A, self._order * self._block_order), ord=1)
         return abserr
@@ -135,12 +142,12 @@ def main():
     print('Number or processes  = ', num_procs)
 
     # create all transpose executors
-    executors = [TransposeExecutor.remote(i, num_procs, order) for i in range()]
+    executors = [TransposeExecutor.remote(i, num_procs, order) for i in range(num_procs)]
     # register the remote transpose executors
     for i in range(num_procs):
         tmp = executors[i]
         executors[i] = None
-        ray.get(tmp.register_executor(executors))  # wait the register finish
+        ray.get(tmp.register_executor.remote(executors))  # wait the register finish
         executors[i] = tmp
 
     for k in range(0, iterations + 1):
@@ -149,7 +156,9 @@ def main():
         if k < 1:
             t0 = timer()
 
-        ray.get([executors[i].transpose.remote() for i in range(num_procs)])
+        idss = ray.get([executors[i].transpose.remote() for i in range(num_procs)])
+        for ids in idss:
+            ray.get(ids)
 
     t1 = timer()
     trans_time = t1 - t0
