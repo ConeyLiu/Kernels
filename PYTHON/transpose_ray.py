@@ -149,7 +149,7 @@ def main():
         if k < 1:
             t0 = timer()
 
-        ids = [executors[i].transpose.remote() for i in range(num_procs)]
+        ray.get([executors[i].transpose.remote() for i in range(num_procs)])
 
     t1 = timer()
     trans_time = t1 - t0
