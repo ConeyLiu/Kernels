@@ -290,21 +290,20 @@ int main(int argc, char ** argv)
         for (j=0; j<Block_order; j++) {
           B(j,i) += A(i,j);
           A(i,j) += 1.0;
-	}
-    }
-    else {
+	    }
+    } else {
       for (i=0; i<Block_order; i+=Tile_order)
         for (j=0; j<Block_order; j+=Tile_order)
           for (it=i; it<MIN(Block_order,i+Tile_order); it++)
             for (jt=j; jt<MIN(Block_order,j+Tile_order);jt++) {
               B(jt,it) += A(it,jt);
               A(it,jt) += 1.0;
-	    }
+	        }
     }
 
-    for (phase=1; phase<Num_procs; phase++){
-      recv_from = (my_ID + phase            )%Num_procs;
-      send_to   = (my_ID - phase + Num_procs)%Num_procs;
+    for (phase=1; phase<Num_procs; phase++) {
+      recv_from = (my_ID + phase            )%Num_procs; // next 
+      send_to   = (my_ID - phase + Num_procs)%Num_procs; // pre
 
 #if !SYNCHRONOUS
       MPI_Irecv(Work_in_p, Block_size, MPI_DOUBLE,
@@ -315,18 +314,17 @@ int main(int argc, char ** argv)
       if (!tiling) {
         for (i=0; i<Block_order; i++)
           for (j=0; j<Block_order; j++){
-	    Work_out(j,i) = A(i,j);
-            A(i,j) += 1.0;
-	  }
-      }
-      else {
+	          Work_out(j,i) = A(i,j);
+	          A(i,j) += 1.0;
+	        }
+      } else {
         for (i=0; i<Block_order; i+=Tile_order)
           for (j=0; j<Block_order; j+=Tile_order)
             for (it=i; it<MIN(Block_order,i+Tile_order); it++)
               for (jt=j; jt<MIN(Block_order,j+Tile_order);jt++) {
                 Work_out(jt,it) = A(it,jt);
                 A(it,jt) += 1.0;
-	      }
+	        }
       }
 
 #if !SYNCHRONOUS
@@ -350,15 +348,15 @@ int main(int argc, char ** argv)
   } /* end of iterations */
 
   local_trans_time = wtime() - local_trans_time;
-  MPI_Reduce(&local_trans_time, &trans_time, 1, MPI_DOUBLE, MPI_MAX, root,
-             MPI_COMM_WORLD);
+  MPI_Reduce(&local_trans_time, &trans_time, 1, MPI_DOUBLE, MPI_MAX, root, MPI_COMM_WORLD);
 
   abserr = 0.0;
   istart = 0;
   double addit = ((double)(iterations+1) * (double) (iterations))/2.0;
-  for (j=0;j<Block_order;j++) for (i=0;i<order; i++) {
+  for (j=0; j<Block_order;j++)
+    for (i=0;i<order; i++) {
       abserr += ABS(B(i,j) - (double)((order*i + j+colstart)*(iterations+1)+addit));
-  }
+    }
 
   MPI_Reduce(&abserr, &abserr_tot, 1, MPI_DOUBLE, MPI_SUM, root, MPI_COMM_WORLD);
 

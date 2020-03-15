@@ -50,12 +50,56 @@
 # *******************************************************************
 
 import sys
+import numpy as np
+import ray
 
-print('Python version = ', str(sys.version_info.major) + '.' + str(sys.version_info.minor))
 if sys.version_info >= (3, 3):
     from time import process_time as timer
 else:
     from timeit import default_timer as timer
+
+
+@ray.remote
+class TransposeExecutor:
+    def __init__(self, index, num_procs, order):
+        import numpy as np
+        self._index = index
+        self._num_procs = num_procs
+        self._order = order
+        self._block_order = order / num_procs
+        self._ma = np.fromfunction(lambda i, j: self._order * (j + self._index) + i,
+                                   (self._order, self._block_order), dtype=np.float)
+        self._mb = np.zeros_like(self._ma)
+
+    def register_executor(self, handlers):
+        self._handlers = handlers
+
+    def transpose(self):
+        row_start = self._index * self._block_order
+        self._mb[row_start: self._block_order, :] += self._ma[row_start: self._block_order, :].T
+        self._ma[row_start: self._block_order, :] += 1.0
+
+        ids = []
+        for phases in range(1, self._num_procs):
+            to_index = (self._index + phases) % self._num_procs
+            assert to_index != self._index
+            row_start = to_index * self._block_order
+            work_out = self._ma[row_start: self._block_order, :].copy()
+            ids.append(self._handlers[to_index].receive.remote(self._index, work_out.T))
+            self._ma[row_start: self._block_order, :] += 1.0
+
+        ray.get(ids)
+
+    def receive(self, from_index, data):
+        row_start = from_index * self._block_order
+        self._mb[row_start: self._block_order, :] += data
+
+    def abserr(self, iterations):
+        A = np.fromfunction(lambda i, j: self._order * (i + self._index) + j,
+                            (self._order, self._block_order), dtype=np.float)
+        A = A * (iterations + 1.0) + (iterations + 1.0) * iterations / 2.0
+        abserr = np.linalg.norm(np.reshape(self._mb - A, self._order * self._block_order), ord=1)
+        return abserr
 
 
 def main():
@@ -63,12 +107,16 @@ def main():
     # read and test input parameters
     # ********************************************************************
 
-    print('Parallel Research Kernels version ')  # , PRKVERSION
-    print('Python Matrix transpose: B = A^T')
+    print('Python version = ', str(sys.version_info.major) + '.' + str(sys.version_info.minor))
+    print('Numpy version  = ', np.version.version)
+    print('Ray version = ', ray.__version__)
 
-    if len(sys.argv) != 3:
+    print('Parallel Research Kernels version ')  # , PRKVERSION
+    print('Python Ray Matrix transpose: B = A^T')
+
+    if len(sys.argv) != 4:
         print('argument count = ', len(sys.argv))
-        sys.exit("Usage: ./transpose <# iterations> <matrix order>")
+        sys.exit("Usage: ./transpose <# iterations> <matrix order> <num_procs>")
 
     iterations = int(sys.argv[1])
     if iterations < 1:
@@ -78,31 +126,30 @@ def main():
     if order < 1:
         sys.exit("ERROR: order must be >= 1")
 
+    num_procs = int(sys.argv[3])
+    if order % num_procs != 0:
+        sys.exit("ERROR: order must be multiple times of num_procs")
+
     print('Number of iterations = ', iterations)
     print('Matrix order         = ', order)
+    print('Number or processes  = ', num_procs)
 
-    # ********************************************************************
-    # ** Allocate space for the input and transpose matrix
-    # ********************************************************************
-
-    # 0.0 is a float, which is 64b (53b of precision)
-    A = [[0.0 for x in range(order)] for x in range(order)]
-    B = [[0.0 for x in range(order)] for x in range(order)]
-
-    # this is surely not the Pythonic way of doing this
-    for i in range(order):
-        for j in range(order):
-            A[i][j] = float(i * order + j)
+    # create all transpose executors
+    executors = [TransposeExecutor.remote(i, num_procs, order) for i in range()]
+    # register the remote transpose executors
+    for i in range(num_procs):
+        tmp = executors[i]
+        executors[i] = None
+        ray.get(tmp.register_executor(executors))  # wait the register finish
+        executors[i] = tmp
 
     for k in range(0, iterations + 1):
 
+        # warm up
         if k < 1:
             t0 = timer()
 
-        for i in range(order):
-            for j in range(order):
-                B[i][j] += A[j][i]
-                A[j][i] += 1.0
+        ids = [executors[i].transpose.remote() for i in range(num_procs)]
 
     t1 = timer()
     trans_time = t1 - t0
@@ -111,12 +158,8 @@ def main():
     # ** Analyze and output results.
     # ********************************************************************
 
-    addit = (iterations * (iterations + 1)) / 2
-    abserr = 0.0;
-    for i in range(order):
-        for j in range(order):
-            temp = (order * j + i) * (iterations + 1)
-            abserr += abs(B[i][j] - float(temp + addit))
+    abserrs = ray.get([executors[i].abserr.remote(iterations) for i in range(num_procs)])
+    abserr = sum(abserrs)
 
     epsilon = 1.e-8
     nbytes = 2 * order ** 2 * 8  # 8 is not sizeof(double) in bytes, but allows for comparison to C etc.
