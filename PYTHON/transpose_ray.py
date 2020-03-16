@@ -70,7 +70,7 @@ class TransposeExecutor:
         self._index_start = self._index * self._block_order
         self._ma = np.fromfunction(lambda i, j: (self._index_start + j) * self._order + i,
                                    (self._order, self._block_order), dtype=np.float)
-        self._mb = np.zeros((self._block_order, self._order), dtype=np.float)
+        self._mb = np.zeros((self._order, self._block_order), dtype=np.float)
 
     def register_executor(self, handlers):
         self._handlers = handlers
@@ -78,7 +78,7 @@ class TransposeExecutor:
     def transpose(self):
         start = self._index_start
         end = start + self._block_order
-        self._mb[:, start: end] += self._ma[start: end, :].T
+        self._mb[start: end, :] += self._ma[start: end, :].T
         self._ma[start: end, :] += 1.0
 
         ids = []
@@ -94,16 +94,17 @@ class TransposeExecutor:
         return ids
 
     def receive(self, from_index, data):
-        col_start = from_index * self._block_order
-        col_end = col_start + self._block_order
-        self._mb[:, col_start: col_end] += data
+        start = from_index * self._block_order
+        end = start + self._block_order
+        self._mb[start: end, ] += data
 
     def get_matrix(self):
+        # For debug purpose
         return self._ma, self._mb
 
     def abserr(self, iterations):
-        A = np.fromfunction(lambda i, j: (i + self._index_start) * self._order + j,
-                            (self._block_order, self._order), dtype=np.float)
+        A = np.fromfunction(lambda i, j: i * self._order + j + self._index_start,
+                            (self._order, self._block_order), dtype=np.float)
         A = A * (iterations + 1.0) + (iterations + 1.0) * iterations / 2.0
         abserr = np.linalg.norm(np.reshape(self._mb - A, self._order * self._block_order), ord=1)
         return abserr
@@ -140,6 +141,8 @@ def main():
     print('Number of iterations = ', iterations)
     print('Matrix order         = ', order)
     print('Number or processes  = ', num_procs)
+
+    ray.init()  # ray init
 
     # create all transpose executors
     executors = [TransposeExecutor.remote(i, num_procs, order) for i in range(num_procs)]
