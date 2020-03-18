@@ -53,10 +53,7 @@ import sys
 import numpy as np
 import ray
 
-if sys.version_info >= (3, 3):
-    from time import process_time as timer
-else:
-    from timeit import default_timer as timer
+import time
 
 
 @ray.remote
@@ -156,13 +153,13 @@ def main():
     for k in range(0, iterations + 1):
 
         if k == 1:
-            t0 = timer()
+            t0 = time()
 
         idss = ray.get([executors[i].transpose.remote() for i in range(num_procs)])
         for ids in idss:
             ray.get(ids)
 
-    t1 = timer()
+    t1 = time()
     trans_time = t1 - t0
 
     # ********************************************************************

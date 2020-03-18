@@ -54,10 +54,7 @@ import numpy as np
 import mpi4py
 from mpi4py import MPI
 
-if sys.version_info >= (3, 3):
-    from time import process_time as timer
-else:
-    from timeit import default_timer as timer
+import time
 
 
 def main():
@@ -70,12 +67,12 @@ def main():
 
     iterations = None
     order = None
-    num_procs = None
+    num_procs = comm.Get_size()
 
     if rank == 0:
         if len(sys.argv) != 4:
             print('argument count = ', len(sys.argv))
-            sys.exit("Usage: ./transpose <# iterations> <matrix order> <num_procs>")
+            sys.exit("Usage: ./transpose <# iterations> <matrix order>")
 
         iterations = int(sys.argv[1])
         if iterations < 1:
@@ -85,7 +82,6 @@ def main():
         if order < 1:
             sys.exit("ERROR: order must be >= 1")
 
-        num_procs = int(sys.argv[3])
         if order % num_procs != 0:
             sys.exit("ERROR: order must be multiple times of num_procs")
 
@@ -103,7 +99,6 @@ def main():
 
     iterations = comm.bcast(iterations, root=0)
     order = comm.bcast(order, root=0)
-    num_procs = comm.bcast(num_procs, root=0)
 
     block_order = order // num_procs
     index_start = rank * block_order
@@ -115,7 +110,7 @@ def main():
 
         if k == 1:
             comm.barrier()
-            t0 = timer()
+            t0 = time.time()
 
         start = index_start
         end = start + block_order
@@ -143,7 +138,7 @@ def main():
             end = start + block_order
             mb[start: end, ] += work_in.T
 
-    t1 = timer()
+    t1 = time.time()
     local_time = t1 - t0
     trans_time = comm.reduce(local_time, op=MPI.MAX, root=0)
 
