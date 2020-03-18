@@ -142,7 +142,7 @@ def main():
 
     for k in range(iterations + 1):
         # start timer after a warmup iteration
-        if k < 1: t0 = timer()
+        if k == 1: t0 = timer()
 
         if pattern == 'star':
             for i in range(r, n - r):

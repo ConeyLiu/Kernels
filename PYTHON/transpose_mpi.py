@@ -113,8 +113,7 @@ def main():
 
     for k in range(0, iterations + 1):
 
-        # warm up
-        if k < 1:
+        if k == 1:
             comm.barrier()
             t0 = timer()
 
@@ -123,25 +122,26 @@ def main():
         mb[start: end, :] += ma[start: end, :].T
         ma[start: end, :] += 1.0
 
-        work_in = np.zeros((block_order, order), dtype=np.float)
+        work_in = np.zeros((block_order, block_order), dtype=np.float)
+        work_out = np.zeros((block_order, block_order), dtype=np.float)
         for phase in range(1, num_procs):
             to_index = (rank + phase) % num_procs
             from_index = (rank - phase + num_procs) % num_procs
 
             start = to_index * block_order
             end = start + block_order
-            work_out = ma[start: end, :].copy()
+            work_out = ma[start: end, :]
 
-            send = comm.isend(work_out, dest=to_index)
-            receive = comm.irecv(work_in, source=from_index)
+            send = comm.Isend(work_out, dest=to_index)
+            receive = comm.Irecv(work_in, source=from_index)
             receive.wait()
             send.wait()
 
+            ma[start: end, :] += 1.0
+
             start = from_index * block_order
             end = start + block_order
-            mb[start: end, ] += work_in
-
-            ma[start: end, :] += 1.0
+            mb[start: end, ] += work_in.T
 
     t1 = timer()
     local_time = t1 - t0
@@ -158,16 +158,16 @@ def main():
     # ** Analyze and output results.
     # ********************************************************************
 
-
-    epsilon = 1.e-8
-    nbytes = 2 * order ** 2 * 8  # 8 is not sizeof(double) in bytes, but allows for comparison to C etc.
-    if abserr < epsilon:
-        print('Solution validates')
-        avgtime = trans_time / iterations
-        print('Rate (MB/s): ', 1.e-6 * nbytes / avgtime, ' Avg time (s): ', avgtime)
-    else:
-        print('error ', abserr, ' exceeds threshold ', epsilon)
-        sys.exit("ERROR: solution did not validate")
+    if rank == 0:
+        epsilon = 1.e-8
+        nbytes = 2 * order ** 2 * 8  # 8 is not sizeof(double) in bytes, but allows for comparison to C etc.
+        if abserr < epsilon:
+            print('Solution validates')
+            avgtime = trans_time / iterations
+            print('Rate (MB/s): ', 1.e-6 * nbytes / avgtime, ' Avg time (s): ', avgtime)
+        else:
+            print('error ', abserr, ' exceeds threshold ', epsilon)
+            sys.exit("ERROR: solution did not validate")
 
 
 if __name__ == '__main__':

@@ -333,7 +333,7 @@ def main():
 
     for k in range(iterations + 1):
         # start timer after a warmup iteration
-        if k < 1:
+        if k == 1:
             t0 = timer()
 
         idss = ray.get([executors[i].execute.remote() for i in range(num_procs)])

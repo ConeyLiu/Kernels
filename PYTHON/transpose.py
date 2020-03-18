@@ -96,7 +96,7 @@ def main():
 
     for k in range(0, iterations + 1):
 
-        if k < 1:
+        if k == 1:
             t0 = timer()
 
         for i in range(order):

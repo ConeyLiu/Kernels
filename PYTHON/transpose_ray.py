@@ -155,8 +155,7 @@ def main():
 
     for k in range(0, iterations + 1):
 
-        # warm up
-        if k < 1:
+        if k == 1:
             t0 = timer()
 
         idss = ray.get([executors[i].transpose.remote() for i in range(num_procs)])
