@@ -118,10 +118,10 @@ def main():
     if pattern == 'star':
         stencil_size = 4 * r + 1
         for i in range(1, r + 1):
-            W[r, r + i] = +1. / (2 * i * r)  # left
-            W[r + i, r] = +1. / (2 * i * r)  # bottom
-            W[r, r - i] = -1. / (2 * i * r)  # right
-            W[r - i, r] = -1. / (2 * i * r)  # up
+            W[r, r + i] = +1. / (2 * i * r)
+            W[r + i, r] = +1. / (2 * i * r)
+            W[r, r - i] = -1. / (2 * i * r)
+            W[r - i, r] = -1. / (2 * i * r)
 
     else:
         stencil_size = (2 * r + 1) ** 2

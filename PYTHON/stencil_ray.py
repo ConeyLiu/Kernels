@@ -58,7 +58,7 @@
 import sys
 import math
 
-import numpy
+import numpy as np
 import ray
 
 if sys.version_info >= (3, 3):
@@ -68,9 +68,10 @@ else:
 
 
 def factor(r):
-    fac1 = math.sqrt(r + 1.0)
+    fac1 = int(math.sqrt(r + 1.0))
+    fac2 = 0
     while fac1 > 0:
-        if r % fac1 != 0:
+        if r % fac1 == 0:
             fac2 = int(r / fac1)
             break
 
@@ -100,8 +101,6 @@ class Executor:
                  i_start, i_end,
                  j_start, j_end):
 
-        import numpy as np
-
         self._order = order
         self._r = r
         self._index = index
@@ -109,12 +108,12 @@ class Executor:
         self._num_procs_x = num_procs_x
         self._num_procs_y = num_procs_y
         self._i_start = i_start
-        self._i_end = i_end
+        self._i_end = i_end + 1
         self._j_start = j_start
-        self._j_end = j_end
+        self._j_end = j_end + 1
 
-        self._width = self._i_end - self._i_start + 1
-        self._height = self._j_end - self._j_start + 1
+        self._width = self._i_end - self._i_start
+        self._height = self._j_end - self._j_start
 
         self._id_x = index % self._num_procs_x
         self._id_y = index // self._num_procs_x
@@ -125,18 +124,23 @@ class Executor:
         self._bottom_nbr_id = index - num_procs_x
 
         self._weight = np.zeros(((2 * r + 1), (2 * r + 1)))
+        for i in range(1, r + 1):
+            self._weight[r, r + i] = +1. / (2 * i * r)
+            self._weight[r + i, r] = +1. / (2 * i * r)
+            self._weight[r, r - i] = -1. / (2 * i * r)
+            self._weight[r - i, r] = -1. / (2 * i * r)
 
+        outer = self
         def fill(i, j):
-            if i < self._i_start or i >= self._i_start:
-                return 0
-            if j < self._j_start or j >= self._j_start:
-                return 0
-
-            return self._i_start + i + self._j_start + j
+            return outer._i_start + i - outer._r + outer._j_start + j - outer._r
 
         self._ma = np.fromfunction(fill,
                                    (self._width + 2 * self._r, self._height + 2 * self._r),
                                    dtype=float)
+        self._ma[0: r, :] = 0
+        self._ma[-r: , :] = 0
+        self._ma[:, 0: r] = 0
+        self._ma[:, -r: ] = 0
         self._mb = np.zeros((self._width, self._height))
 
     def register(self, left, right, top, bottom):
@@ -153,7 +157,7 @@ class Executor:
             j_start = self._r + self._height - self._r
             j_end = j_start + self._r
             out = self._ma[i_start: i_end, j_start: j_end].copy()
-            ids.append(self._top_nbr.receive.remote(out))
+            ids.append(self._top_nbr.receive.remote(self._index, out))
 
         if self._id_y > 0:
             i_start = self._r
@@ -161,7 +165,7 @@ class Executor:
             j_start = self._r
             j_end = j_start + self._r
             out = self._ma[i_start: i_end, j_start: j_end].copy()
-            ids.append(self._bottom_nbr.receive.remote(out))
+            ids.append(self._bottom_nbr.receive.remote(self._index,out))
 
         if self._id_x < (self._num_procs_x - 1):
             i_start = self._width + self._r - self._r
@@ -169,7 +173,7 @@ class Executor:
             j_start = self._r
             j_end = j_start + self._height
             out = self._ma[i_start: i_end, j_start: j_end].copy()
-            ids.append(self._right_nbr.receive.remote(out))
+            ids.append(self._right_nbr.receive.remote(self._index,out))
 
         if self._id_x > 0:
             i_start = self._r
@@ -177,7 +181,7 @@ class Executor:
             j_start = self._r
             j_end = j_start + self._height
             out = self._ma[i_start: i_end, j_start: j_end].copy()
-            ids.append(self._left_nbr.receive.remote(out))
+            ids.append(self._left_nbr.receive.remote(self._index,out))
 
         return ids
 
@@ -252,7 +256,7 @@ def main():
 
     print('Python version = ', str(sys.version_info.major) + '.' + str(sys.version_info.minor))
     print('Ray version    = ', ray.__version__)
-    print('Numpy version  = ', numpy.version.version)
+    print('Numpy version  = ', np.version.version)
 
     print('Parallel Research Kernels version ')  # , PRKVERSION
     print('Python stencil execution on 2D grid')
@@ -288,6 +292,8 @@ def main():
     print('Number of iterations = ', iterations)
     print('Number of processes  = ', num_procs)
 
+    ray.init(address='auto', node_ip_address='sr231', redis_password='123')
+
     num_procs_x, num_procs_y = factor(num_procs)
 
     executors = []
@@ -316,18 +322,19 @@ def main():
 
     for i in range(num_procs):
         id_x = i % num_procs_x
-        id_y = i // num_procs_y
+        id_y = i // num_procs_x
 
         left = executors[i - 1] if id_x > 0 else None
         right = executors[i + 1] if id_x < num_procs_x - 1 else None
-        top = executors[i + num_procs_x] if id_y > 0 else None
-        bottom = executors[i - num_procs_x] if id_y < num_procs_y - 1 else None
+        top = executors[i + num_procs_x] if id_y < num_procs_y - 1 else None
+        bottom = executors[i - num_procs_x] if id_y > 0 else None
 
-        ray.get(executors[i].register(left, right, top, bottom))
+        ray.get(executors[i].register.remote(left, right, top, bottom))
 
     for k in range(iterations + 1):
         # start timer after a warmup iteration
-        if k < 1: t0 = timer()
+        if k < 1:
+            t0 = timer()
 
         idss = ray.get([executors[i].execute.remote() for i in range(num_procs)])
         for ids in idss:
@@ -342,7 +349,7 @@ def main():
     # * Analyze and output results.
     # ******************************************************************************
 
-    abserrors = [ray.get(executors[i].abserror.remote() for i in range(num_procs))]
+    abserrors = [ray.get(executors[i].abserror.remote()) for i in range(num_procs)]
     norm = sum(abserrors)
     active_points = (n - 2 * r) ** 2
     norm /= active_points

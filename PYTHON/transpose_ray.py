@@ -142,7 +142,7 @@ def main():
     print('Matrix order         = ', order)
     print('Number or processes  = ', num_procs)
 
-    ray.init()  # ray init
+    ray.init(address='auto', node_ip_address='sr231', redis_password='123')  # ray init
 
     # create all transpose executors
     executors = [TransposeExecutor.remote(i, num_procs, order) for i in range(num_procs)]
