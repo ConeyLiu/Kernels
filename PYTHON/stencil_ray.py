@@ -340,8 +340,6 @@ def main():
     t1 = time.time()
     stencil_time = t1 - t0
 
-    ray.shutdown()
-
     # ******************************************************************************
     # * Analyze and output results.
     # ******************************************************************************
@@ -352,6 +350,8 @@ def main():
     norm /= active_points
 
     epsilon = 1.e-8
+
+    ray.shutdown()
 
     # verify correctness
     reference_norm = 2 * (iterations + 1)

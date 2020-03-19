@@ -162,14 +162,14 @@ def main():
     t1 = time.time()
     trans_time = t1 - t0
 
-    ray.shutdown()
-
     # ********************************************************************
     # ** Analyze and output results.
     # ********************************************************************
 
     abserrs = ray.get([executors[i].abserr.remote(iterations) for i in range(num_procs)])
     abserr = sum(abserrs)
+
+    ray.shutdown()
 
     epsilon = 1.e-8
     nbytes = 2 * order ** 2 * 8  # 8 is not sizeof(double) in bytes, but allows for comparison to C etc.
