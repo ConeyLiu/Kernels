@@ -61,10 +61,7 @@ import math
 import numpy as np
 import ray
 
-if sys.version_info >= (3, 3):
-    from time import process_time as timer
-else:
-    from timeit import default_timer as timer
+import time
 
 
 def factor(r):
@@ -165,7 +162,7 @@ class Executor:
             j_start = self._r
             j_end = j_start + self._r
             out = self._ma[i_start: i_end, j_start: j_end].copy()
-            ids.append(self._bottom_nbr.receive.remote(self._index,out))
+            ids.append(self._bottom_nbr.receive.remote(self._index, out))
 
         if self._id_x < (self._num_procs_x - 1):
             i_start = self._width + self._r - self._r
@@ -173,7 +170,7 @@ class Executor:
             j_start = self._r
             j_end = j_start + self._height
             out = self._ma[i_start: i_end, j_start: j_end].copy()
-            ids.append(self._right_nbr.receive.remote(self._index,out))
+            ids.append(self._right_nbr.receive.remote(self._index, out))
 
         if self._id_x > 0:
             i_start = self._r
@@ -181,7 +178,7 @@ class Executor:
             j_start = self._r
             j_end = j_start + self._height
             out = self._ma[i_start: i_end, j_start: j_end].copy()
-            ids.append(self._left_nbr.receive.remote(self._index,out))
+            ids.append(self._left_nbr.receive.remote(self._index, out))
 
         return ids
 
@@ -241,12 +238,10 @@ class Executor:
         self._ma[self._r: self._width + self._r, self._r: self._height + self._r] += 1
 
     def abserror(self):
-        i_start = max(self._i_start, self._r) - self._i_start + self._r
-        i_end = min(self._i_end, self._order - self._r) - self._i_start + self._r
-        j_start = max(self._j_start, self._r) - self._j_start + self._r
-        j_end = min(self._j_end, self._order - self._r) - self._j_start + self._r
-        m = self._mb[i_start: i_end, j_start: j_end]
-        return np.linalg.norm(np.reshape(m, m.size), ord=1)
+        return np.linalg.norm(np.reshape(self._mb, self._mb.size), ord=1)
+
+    def get_matrix(self):
+        return self.ma, self._mb
 
 
 def main():
@@ -334,7 +329,7 @@ def main():
     for k in range(iterations + 1):
         # start timer after a warmup iteration
         if k == 1:
-            t0 = timer()
+            t0 = time.time()
 
         idss = ray.get([executors[i].execute.remote() for i in range(num_procs)])
         for ids in idss:
@@ -342,8 +337,10 @@ def main():
 
         ray.get([executors[i].apply_stencil_operator.remote() for i in range(num_procs)])
 
-    t1 = timer()
+    t1 = time.time()
     stencil_time = t1 - t0
+
+    ray.shutdown()
 
     # ******************************************************************************
     # * Analyze and output results.

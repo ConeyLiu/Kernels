@@ -70,7 +70,7 @@ def main():
     num_procs = comm.Get_size()
 
     if rank == 0:
-        if len(sys.argv) != 4:
+        if len(sys.argv) != 3:
             print('argument count = ', len(sys.argv))
             sys.exit("Usage: ./transpose <# iterations> <matrix order>")
 

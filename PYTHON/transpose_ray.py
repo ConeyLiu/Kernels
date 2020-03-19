@@ -153,14 +153,16 @@ def main():
     for k in range(0, iterations + 1):
 
         if k == 1:
-            t0 = time()
+            t0 = time.time()
 
         idss = ray.get([executors[i].transpose.remote() for i in range(num_procs)])
         for ids in idss:
             ray.get(ids)
 
-    t1 = time()
+    t1 = time.time()
     trans_time = t1 - t0
+
+    ray.shutdown()
 
     # ********************************************************************
     # ** Analyze and output results.
