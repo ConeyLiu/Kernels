@@ -183,28 +183,28 @@ class Executor:
         return ids
 
     def receive(self, id, data):
-        if id == self._top_nbr_id:
+        if id == self._top_nbr_id and self._top_nbr:
             i_start = self._r
             i_end = i_start + self._width
             j_start = self._height + self._r
             j_end = j_start + self._r
             self._ma[i_start: i_end, j_start: j_end] = data
 
-        if id == self._bottom_nbr_id:
+        if id == self._bottom_nbr_id and self._bottom_nbr:
             i_start = self._r
             i_end = i_start + self._width
             j_start = 0
             j_end = j_start + self._r
             self._ma[i_start: i_end, j_start: j_end] = data
 
-        if id == self._left_nbr_id:
+        if id == self._left_nbr_id and self._left_nbr:
             i_start = 0
             i_end = i_start + self._r
             j_start = self._r
             j_end = j_start + self._height
             self._ma[i_start: i_end, j_start: j_end] = data
 
-        if id == self._right_nbr_id:
+        if id == self._right_nbr_id and self._right_nbr:
             i_start = self._width + self._r
             i_end = i_start + self._r
             j_start = self._r
@@ -241,7 +241,7 @@ class Executor:
         return np.linalg.norm(np.reshape(self._mb, self._mb.size), ord=1)
 
     def get_matrix(self):
-        return self.ma, self._mb
+        return self._ma, self._mb
 
 
 def main():

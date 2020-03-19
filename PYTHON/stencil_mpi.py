@@ -84,10 +84,10 @@ def compute_star_end(i, n, axis):
 
     if i < r:
         start = (q + 1) * i
-        end = start + q
+        end = start + q + 1
     else:
         start = (q + 1) * r + q * (i - r)
-        end = start + q - 1
+        end = start + q
 
     return start, end
 
@@ -150,17 +150,17 @@ def main():
     num_procs_x, num_procs_y = factor(num_procs)
 
     id_x = rank % num_procs_x
-    id_y = rank % num_procs_y
+    id_y = rank // num_procs_x
 
     i_start, i_end = compute_star_end(id_x, n, num_procs_x)
 
-    width = i_end - i_start + 1
+    width = i_end - i_start
     if width == 0:
         print(f"ERROR: rank {rank} has no work to do")
         sys.exit(1)
 
     j_start, j_end = compute_star_end(id_y, n, num_procs_y)
-    height = j_end - j_start + 1
+    height = j_end - j_start
     if height == 0:
         print(f"ERROR: rank {rank} has no work to do")
         sys.exit(1)
@@ -202,96 +202,109 @@ def main():
             t0 = time.time()
 
         # send
+        top_send = None
+        bottom_send = None
+        left_send = None
+        right_send = None
         if id_y < (num_procs_y - 1):
             top_receive = comm.Irecv(top_in, source=top_nbr_id)
-            i_start = r
-            i_end = i_start + width
-            j_start = r + height - r
-            j_end = j_start + r
-            out = ma[i_start: i_end, j_start: j_end].copy()
+            i_s = r
+            i_e = i_s + width
+            j_s = r + height - r
+            j_e = j_s + r
+            out = ma[i_s: i_e, j_s: j_e].copy()
             top_send = comm.Isend(out, dest=top_nbr_id)
 
         if id_y > 0:
             bottom_receive = comm.Irecv(bottom_in, source=bottom_nbr_id)
-            i_start = r
-            i_end = i_start + width
-            j_start = r
-            j_end = j_start + r
-            out = ma[i_start: i_end, j_start: j_end].copy()
+            i_s = r
+            i_e = i_s + width
+            j_s = r
+            j_e = j_s + r
+            out = ma[i_s: i_e, j_s: j_e].copy()
             bottom_send = comm.Isend(out, dest=bottom_nbr_id)
 
         if id_x < (num_procs_x - 1):
             right_receive = comm.Irecv(right_in, source=right_nbr_id)
-            i_start = width + r - r
-            i_end = i_start + r
-            j_start = r
-            j_end = j_start + height
-            out = ma[i_start: i_end, j_start: j_end].copy()
+            i_s = width + r - r
+            i_e = i_s + r
+            j_s = r
+            j_e = j_s + height
+            out = ma[i_s: i_e, j_s: j_e].copy()
             right_send = comm.Isend(out, dest=right_nbr_id)
 
         if id_x > 0:
             left_receive = comm.Irecv(left_in, source=left_nbr_id)
-            i_start = r
-            i_end = i_start + r
-            j_start = r
-            j_end = j_start + height
-            out = ma[i_start: i_end, j_start: j_end].copy()
+            i_s = r
+            i_e = i_s + r
+            j_s = r
+            j_e = j_s + height
+            out = ma[i_s: i_e, j_s: j_e].copy()
             left_send = comm.Isend(out, dest=left_nbr_id)
+
+        if left_send:
+            left_send.wait()
+        if right_send:
+            right_send.wait()
+        if top_send:
+            top_send.wait()
+        if bottom_send:
+            bottom_send.wait()
 
         # receive
         if id_y < (num_procs_y - 1):
             top_receive.wait()
-            i_start = r
-            i_end = i_start + width
-            j_start = height + r
-            j_end = j_start + r
-            ma[i_start: i_end, j_start: j_end] = top_in
+            i_s = r
+            i_e = i_s + width
+            j_s = height + r
+            j_e = j_s + r
+            ma[i_s: i_e, j_s: j_e] = top_in
 
         if id_y > 0:
             bottom_receive.wait()
-            i_start = r
-            i_end = i_start + width
-            j_start = 0
-            j_end = j_start + r
-            ma[i_start: i_end, j_start: j_end] = bottom_in
-
-        if id_x < (num_procs_x - 1):
-            right_receive.wait()
-            i_start = 0
-            i_end = i_start + r
-            j_start = r
-            j_end = j_start + height
-            ma[i_start: i_end, j_start: j_end] = right_in
+            i_s = r
+            i_e = i_s + width
+            j_s = 0
+            j_e = j_s + r
+            ma[i_s: i_e, j_s: j_e] = bottom_in
 
         if id_x > 0:
             left_receive.wait()
-            i_start = width + r
-            i_end = i_start + r
-            j_start = r
-            j_end = j_start + height
-            ma[i_start: i_end, j_start: j_end] = left_in
+            i_s = 0
+            i_e = i_s + r
+            j_s = r
+            j_e = j_s + height
+            ma[i_s: i_e, j_s: j_e] = left_in
+
+        if id_x < (num_procs_x - 1):
+            right_receive.wait()
+            i_s = width + r
+            i_e = i_s + r
+            j_s = r
+            j_e = j_s + height
+            ma[i_s: i_e, j_s: j_e] = right_in
 
         # apply stencil operator
 
         # for A index
-        i_start = max(i_start, r) - i_start + r
-        i_end = min(i_end, n - r) - i_start + r
-        j_start = max(j_start, r) - j_start + r
-        j_end = min(j_end, n - r) - j_start + r
+        i_s = max(i_start, r) - i_start + r
+        i_e = min(i_end, n - r) - i_start + r
+        j_s = max(j_start, r) - j_start + r
+        j_e = min(j_end, n - r) - j_start + r
 
         # for B index
-        i_b_s = i_start - r
-        i_b_e = i_end - r
-        j_b_s = j_start - r
-        j_b_e = j_end - r
+        i_b_s = i_s - r
+        i_b_e = i_e - r
+        j_b_s = j_s - r
+        j_b_e = j_e - r
 
         W = weight
-        mb[i_b_s: i_b_e, j_b_s: j_b_e] += W[r, r] * ma[i_start: i_end, j_start: j_end]
+        mb[i_b_s: i_b_e, j_b_s: j_b_e] += W[r, r] * ma[i_s: i_e, j_s: j_e]
         for s in range(1, r + 1):
-            mb[i_b_s: i_b_e, j_b_s: j_b_e] += W[r, r - s] * ma[i_start: i_end, j_start - s: j_end - s] \
-                                            + W[r, r + s] * ma[i_start: i_end, j_start + s: j_end + s] \
-                                            + W[r - s, r] * ma[i_start - s: i_end - s, j_start: j_end] \
-                                            + W[r + s, r] * ma[i_start + s: i_end + s, j_start: j_end]
+            mb[i_b_s: i_b_e, j_b_s: j_b_e] += W[r, r - s] * ma[i_s: i_e, j_s - s: j_e - s] \
+                                            + W[r, r + s] * ma[i_s: i_e, j_s + s: j_e + s] \
+                                            + W[r - s, r] * ma[i_s - s: i_e - s, j_s: j_e] \
+                                            + W[r + s, r] * ma[i_s + s: i_e + s, j_s: j_e]
 
         ma[r: width + r, r: height + r] += 1
 
