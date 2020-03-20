@@ -50,11 +50,14 @@
 # *******************************************************************
 
 import sys
+import time
+import os
+
 import numpy as np
 import mpi4py
 from mpi4py import MPI
 
-import time
+os.environ['OMP_NUM_THREADS']='1'
 
 
 def main():

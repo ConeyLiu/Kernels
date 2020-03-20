@@ -56,7 +56,7 @@ import ray
 import time
 
 
-@ray.remote
+@ray.remote(num_cpus=1)
 class TransposeExecutor:
     def __init__(self, index, num_procs, order):
         import numpy as np

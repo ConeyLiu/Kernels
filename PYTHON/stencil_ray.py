@@ -91,7 +91,7 @@ def compute_star_end(i, n, axis):
     return start, end
 
 
-@ray.remote
+@ray.remote(num_cpus=1)
 class Executor:
     def __init__(self, order, r, index, num_procs,
                  num_procs_x, num_procs_y,
