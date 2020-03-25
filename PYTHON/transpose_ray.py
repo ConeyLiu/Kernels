@@ -55,13 +55,58 @@ import ray
 
 import time
 
+# place this controller on the same node as driver
+@ray.remote(resources={"0": 1})
+class Controller:
+    def __init__(self, iterations):
+        self._iterations = iterations + 1 # 1 for warm up
+        self._executors = []
+        self._cur_iteration = 0
+        self._cur_registered = 0
+        self._executor_durations = []
+        self._finished = False
+        self._has_error = False
+    
+    def set_up(self, executors):
+        self._executors = executors
+    
+    def transpose(self):
+        for e in self._executors:
+            e.transpose.remote(self._cur_iteration)
+
+    def register_durations(self, worker_index, iteration_index, duration):
+        if self._finished:
+            return
+
+        if iteration_index != self._cur_iteration:
+            # error
+            self._finished = True
+            self._has_error = True
+        
+        if self._cur_iteration > 0:
+            self._executor_durations[worker_index] += duration
+        self._cur_registered += 1
+        if self._cur_registered == self._iterations:
+            self._cur_iteration += 1
+            self._cur_registered = 0
+
+            if self._cur_iteration < self._iterations:
+                self.transpose()
+    
+    def get_results(self):
+        max_durations = 0
+        if self._finished:
+            max_durations = np.max(self._executor_durations)
+        return self._finished, self._has_error, max_durations
+
 
 @ray.remote(num_cpus=1)
 class TransposeExecutor:
-    def __init__(self, index, num_procs, order):
+    def __init__(self, index, num_procs, order, controller):
         import numpy as np
         self._index = index
         self._num_procs = num_procs
+        self._controller = controller
         self._order = order
         self._block_order = order // num_procs
         self._index_start = self._index * self._block_order
@@ -69,31 +114,43 @@ class TransposeExecutor:
                                    (self._order, self._block_order), dtype=np.float)
         self._mb = np.zeros((self._order, self._block_order), dtype=np.float)
 
+        self._iteration_index = None
+        self._iteration_start = None
+        self._phases = 1
+
     def register_executor(self, handlers):
         self._handlers = handlers
 
-    def transpose(self):
+    def transpose(self, iteration_index):
+        if self._phases == 1:
+            self._iteration_start = time.time()
+            self._iteration_index = iteration_index
         start = self._index_start
         end = start + self._block_order
         self._mb[start: end, :] += self._ma[start: end, :].T
         self._ma[start: end, :] += 1.0
 
-        ids = []
-        for phases in range(1, self._num_procs):
-            to_index = (self._index + phases) % self._num_procs
-            assert to_index != self._index
-            start = to_index * self._block_order
-            end = start + self._block_order
-            work_out = self._ma[start: end, :].copy()
-            ids.append(self._handlers[to_index].receive.remote(self._index, work_out.T))
-            self._ma[start: end, :] += 1.0
-
-        return ids
+        to_index = (self._index + self._phases) % self._num_procs
+        assert to_index != self._index
+        start = to_index * self._block_order
+        end = start + self._block_order
+        work_out = self._ma[start: end, :]
+        self._handlers[to_index].receive.remote(self._index, work_out)
+        self._ma[start: end, :] += 1.0
 
     def receive(self, from_index, data):
         start = from_index * self._block_order
         end = start + self._block_order
-        self._mb[start: end, ] += data
+        self._mb[start: end, ] += data.T
+
+        self._phases += 1
+        if self._phases == self._num_procs:
+            self._phases = 1
+            self._iteration_index = None
+            duration = time.time() - self._iteration_start
+            self._controller.register_durations(self._index, self._iteration_index, duration)
+        else:
+            self.transpose(self._iteration_index)
 
     def get_matrix(self):
         # For debug purpose
@@ -141,8 +198,10 @@ def main():
 
     ray.init(address='auto', node_ip_address='sr231', redis_password='123')  # ray init
 
+    # set up controller
+    controller = Controller.remote(iterations)
     # create all transpose executors
-    executors = [TransposeExecutor.remote(i, num_procs, order) for i in range(num_procs)]
+    executors = [TransposeExecutor.remote(i, num_procs, order, controller) for i in range(num_procs)]
     # register the remote transpose executors
     for i in range(num_procs):
         tmp = executors[i]
@@ -150,17 +209,18 @@ def main():
         ray.get(tmp.register_executor.remote(executors))  # wait the register finish
         executors[i] = tmp
 
-    for k in range(0, iterations + 1):
+    controller.transpose.remote()
 
-        if k == 1:
-            t0 = time.time()
+    results = controller.get_results.remote()
+    while not results[0]:
+        time.sleep(1)
+        results = controller.get_results.remote()
+    
+    if results[1]:
+        print("ERROR iteration")
+        sys.exit(-1)
 
-        idss = ray.get([executors[i].transpose.remote() for i in range(num_procs)])
-        for ids in idss:
-            ray.get(ids)
-
-    t1 = time.time()
-    trans_time = t1 - t0
+    trans_time = results[2]  # max duration
 
     # ********************************************************************
     # ** Analyze and output results.
