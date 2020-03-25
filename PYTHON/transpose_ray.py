@@ -65,10 +65,11 @@ class Controller:
         self._cur_registered = 0
         self._executor_durations = []
         self._finished = False
-        self._has_error = False
+        self._error = None
     
     def set_up(self, executors):
         self._executors = executors
+        self._executor_durations = [0] * len(self._executors)
     
     def transpose(self):
         for e in self._executors:
@@ -81,23 +82,26 @@ class Controller:
         if iteration_index != self._cur_iteration:
             # error
             self._finished = True
-            self._has_error = True
+            self._error = (self._cur_iteration, worker_index, iteration_index)
         
         if self._cur_iteration > 0:
             self._executor_durations[worker_index] += duration
+
         self._cur_registered += 1
-        if self._cur_registered == self._iterations:
+        if self._cur_registered == len(self._executors):
             self._cur_iteration += 1
             self._cur_registered = 0
 
             if self._cur_iteration < self._iterations:
                 self.transpose()
+            else:
+                self._finished = True
     
     def get_results(self):
         max_durations = 0
         if self._finished:
             max_durations = np.max(self._executor_durations)
-        return self._finished, self._has_error, max_durations
+        return self._finished, self._error, max_durations
 
 
 @ray.remote(num_cpus=1)
@@ -145,10 +149,10 @@ class TransposeExecutor:
 
         self._phases += 1
         if self._phases == self._num_procs:
+            duration = time.time() - self._iteration_start
+            self._controller.register_durations.remote(self._index, self._iteration_index, duration)
             self._phases = 1
             self._iteration_index = None
-            duration = time.time() - self._iteration_start
-            self._controller.register_durations(self._index, self._iteration_index, duration)
         else:
             self.transpose(self._iteration_index)
 
@@ -209,15 +213,17 @@ def main():
         ray.get(tmp.register_executor.remote(executors))  # wait the register finish
         executors[i] = tmp
 
+    controller.set_up.remote(executors)
+
     controller.transpose.remote()
 
-    results = controller.get_results.remote()
+    results = ray.get(controller.get_results.remote())
     while not results[0]:
         time.sleep(1)
-        results = controller.get_results.remote()
+        results = ray.get(controller.get_results.remote())
     
     if results[1]:
-        print("ERROR iteration")
+        print("ERROR iteration:", results[1])
         sys.exit(-1)
 
     trans_time = results[2]  # max duration
