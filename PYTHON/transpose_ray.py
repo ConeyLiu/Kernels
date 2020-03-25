@@ -129,10 +129,11 @@ class TransposeExecutor:
         if self._phases == 1:
             self._iteration_start = time.time()
             self._iteration_index = iteration_index
-        start = self._index_start
-        end = start + self._block_order
-        self._mb[start: end, :] += self._ma[start: end, :].T
-        self._ma[start: end, :] += 1.0
+
+            start = self._index_start
+            end = start + self._block_order
+            self._mb[start: end, :] += self._ma[start: end, :].T
+            self._ma[start: end, :] += 1.0
 
         to_index = (self._index + self._phases) % self._num_procs
         assert to_index != self._index
