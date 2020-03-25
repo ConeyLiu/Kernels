@@ -121,7 +121,6 @@ def main():
         ma[start: end, :] += 1.0
 
         work_in = np.zeros((block_order, block_order), dtype=np.float)
-        work_out = np.zeros((block_order, block_order), dtype=np.float)
         for phase in range(1, num_procs):
             to_index = (rank + phase) % num_procs
             from_index = (rank - phase + num_procs) % num_procs
