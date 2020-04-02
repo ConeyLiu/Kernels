@@ -331,7 +331,8 @@ def main():
         reference_norm = 2 * (iterations + 1)
         if abs(norm - reference_norm) < epsilon:
             print('Solution validates')
-            flops = (2 * r + 1) * active_points
+            stencil_size = 4 * r + 1
+            flops = (2 * stencil_size + 1) * active_points
             avgtime = stencil_time / iterations
             print('Rate (MFlops/s): ', 1.e-6 * flops / avgtime, ' Avg time (s): ', avgtime)
         else:
