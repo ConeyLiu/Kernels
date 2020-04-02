@@ -126,11 +126,15 @@ class TransposeExecutor:
     def register_executor(self, handlers):
         self._handlers = handlers
 
-    def tranpose(self, from_index, iteration_index, data):
+    def transpose(self, from_index, iteration_index, data):
+        # Note: ideal order should be Controller call this first and then
+        # receive from executor. However, this can be misordered when there
+        # are many executors.
         if not self._iteration_start:
             self._iteration_start = time.time()
         
-        if iteration_index == -1:
+        phase = None
+        if from_index == -1:
             # call from Controller, tranpose itself
             self._iteration_index = iteration_index
             start = self._index_start
@@ -138,21 +142,23 @@ class TransposeExecutor:
             self._mb[start: end, :] += self._ma[start: end, :].T
             self._ma[start: end, :] += 1.0
             self._transposed = True
+            phase = 1
         else:
             # call from other executors
             start = from_index * self._block_order
             end = start + self._block_order
-            self._mb[start: end, ] += data.T
+            self._mb[start: end, :] += data.T
+            self._phases += 1
+            phase = self._phases
         
         if self._phases < self._num_procs:
-            to_index = (self._index + self._phases) % self._num_procs
+            to_index = (self._index + phase) % self._num_procs
             assert to_index != self._index
             start = to_index * self._block_order
             end = start + self._block_order
             work_out = self._ma[start: end, :]
-            self._handlers[to_index].tranpose.remote(self._index, None, work_out)
+            self._handlers[to_index].transpose.remote(self._index, None, work_out)
             self._ma[start: end, :] += 1.0
-            self._phases += 1
 
         if self._transposed and (self._phases == self._num_procs):
             duration = time.time() - self._iteration_start
@@ -161,7 +167,6 @@ class TransposeExecutor:
             self._iteration_index = None
             self._iteration_start = None
             self._transposed = False
-            return
 
     def get_matrix(self):
         # For debug purpose
