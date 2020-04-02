@@ -73,7 +73,7 @@ class Controller:
     
     def transpose(self):
         for e in self._executors:
-            e.transpose.remote(self._cur_iteration)
+            e.transpose.remote(-1, self._cur_iteration, None)
 
     def register_durations(self, worker_index, iteration_index, duration):
         if self._finished:
@@ -121,45 +121,47 @@ class TransposeExecutor:
         self._iteration_index = None
         self._iteration_start = None
         self._phases = 1
+        self._transposed = False # indicate whether tranpose self
 
     def register_executor(self, handlers):
         self._handlers = handlers
 
-    def transpose(self, iteration_index):
-        if not self._iteration_index:
-            self._iteration_index = iteration_index
-        if self._phases == 1 and not self._iteration_start:
+    def tranpose(self, from_index, iteration_index, data):
+        if not self._iteration_start:
             self._iteration_start = time.time()
-
+        
+        if iteration_index == -1:
+            # call from Controller, tranpose itself
+            self._iteration_index = iteration_index
             start = self._index_start
             end = start + self._block_order
             self._mb[start: end, :] += self._ma[start: end, :].T
             self._ma[start: end, :] += 1.0
+            self._transposed = True
+        else:
+            # call from other executors
+            start = from_index * self._block_order
+            end = start + self._block_order
+            self._mb[start: end, ] += data.T
+        
+        if self._phases < self._num_procs:
+            to_index = (self._index + self._phases) % self._num_procs
+            assert to_index != self._index
+            start = to_index * self._block_order
+            end = start + self._block_order
+            work_out = self._ma[start: end, :]
+            self._handlers[to_index].tranpose.remote(self._index, None, work_out)
+            self._ma[start: end, :] += 1.0
+            self._phases += 1
 
-        to_index = (self._index + self._phases) % self._num_procs
-        assert to_index != self._index
-        start = to_index * self._block_order
-        end = start + self._block_order
-        work_out = self._ma[start: end, :]
-        self._handlers[to_index].receive.remote(self._index, work_out)
-        self._ma[start: end, :] += 1.0
-
-    def receive(self, from_index, data):
-        # the receive method can be call before than transpose
-        if self._phases == 1 and not self._iteration_start:
-            self._iteration_start = time.time()
-        start = from_index * self._block_order
-        end = start + self._block_order
-        self._mb[start: end, ] += data.T
-
-        self._phases += 1
-        if self._phases == self._num_procs:
+        if self._transposed and (self._phases == self._num_procs):
             duration = time.time() - self._iteration_start
             self._controller.register_durations.remote(self._index, self._iteration_index, duration)
             self._phases = 1
             self._iteration_index = None
-        else:
-            self.transpose(self._iteration_index)
+            self._iteration_start = None
+            self._transposed = False
+            return
 
     def get_matrix(self):
         # For debug purpose
