@@ -30,7 +30,7 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-#*******************************************************************
+# *******************************************************************
 #
 # NAME:    transpose
 #
@@ -50,19 +50,20 @@
 # *******************************************************************
 
 import sys
-print('Python version = ', str(sys.version_info.major)+'.'+str(sys.version_info.minor))
+
+print('Python version = ', str(sys.version_info.major) + '.' + str(sys.version_info.minor))
 if sys.version_info >= (3, 3):
     from time import process_time as timer
 else:
     from timeit import default_timer as timer
 
-def main():
 
+def main():
     # ********************************************************************
     # read and test input parameters
     # ********************************************************************
 
-    print('Parallel Research Kernels version ') #, PRKVERSION
+    print('Parallel Research Kernels version ')  # , PRKVERSION
     print('Python Matrix transpose: B = A^T')
 
     if len(sys.argv) != 3:
@@ -91,17 +92,17 @@ def main():
     # this is surely not the Pythonic way of doing this
     for i in range(order):
         for j in range(order):
-            A[i][j] = float(i*order+j)
+            A[i][j] = float(i * order + j)
 
-    for k in range(0,iterations+1):
+    for k in range(0, iterations + 1):
 
-        if k<1: t0 = timer()
+        if k == 1:
+            t0 = timer()
 
         for i in range(order):
             for j in range(order):
                 B[i][j] += A[j][i]
                 A[j][i] += 1.0
-
 
     t1 = timer()
     trans_time = t1 - t0
@@ -110,24 +111,23 @@ def main():
     # ** Analyze and output results.
     # ********************************************************************
 
-    addit = (iterations * (iterations+1))/2
+    addit = (iterations * (iterations + 1)) / 2
     abserr = 0.0;
     for i in range(order):
         for j in range(order):
-            temp    = (order*j+i) * (iterations+1)
-            abserr += abs(B[i][j] - float(temp+addit))
+            temp = (order * j + i) * (iterations + 1)
+            abserr += abs(B[i][j] - float(temp + addit))
 
-    epsilon=1.e-8
-    nbytes = 2 * order**2 * 8 # 8 is not sizeof(double) in bytes, but allows for comparison to C etc.
+    epsilon = 1.e-8
+    nbytes = 2 * order ** 2 * 8  # 8 is not sizeof(double) in bytes, but allows for comparison to C etc.
     if abserr < epsilon:
         print('Solution validates')
-        avgtime = trans_time/iterations
-        print('Rate (MB/s): ',1.e-6*nbytes/avgtime, ' Avg time (s): ', avgtime)
+        avgtime = trans_time / iterations
+        print('Rate (MB/s): ', 1.e-6 * nbytes / avgtime, ' Avg time (s): ', avgtime)
     else:
-        print('error ',abserr, ' exceeds threshold ',epsilon)
+        print('error ', abserr, ' exceeds threshold ', epsilon)
         sys.exit("ERROR: solution did not validate")
 
 
 if __name__ == '__main__':
     main()
-

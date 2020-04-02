@@ -30,7 +30,7 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-#*******************************************************************
+# *******************************************************************
 #
 # NAME:    transpose
 #
@@ -50,21 +50,23 @@
 # *******************************************************************
 
 import sys
-print('Python version = ', str(sys.version_info.major)+'.'+str(sys.version_info.minor))
+
+print('Python version = ', str(sys.version_info.major) + '.' + str(sys.version_info.minor))
 if sys.version_info >= (3, 3):
     from time import process_time as timer
 else:
     from timeit import default_timer as timer
 import numpy
+
 print('Numpy version  = ', numpy.version.version)
 
-def main():
 
+def main():
     # ********************************************************************
     # read and test input parameters
     # ********************************************************************
 
-    print('Parallel Research Kernels version ') #, PRKVERSION
+    print('Parallel Research Kernels version ')  # , PRKVERSION
     print('Python Numpy Matrix transpose: B = A^T')
 
     if len(sys.argv) != 3:
@@ -86,12 +88,13 @@ def main():
     # ** Allocate space for the input and transpose matrix
     # ********************************************************************
 
-    A = numpy.fromfunction(lambda i,j: i*order+j, (order,order), dtype=float)
-    B = numpy.zeros((order,order))
+    A = numpy.arange(order * order, dtype=numpy.float).reshape((order, order))
+    B = numpy.zeros((order, order))
 
-    for k in range(0,iterations+1):
+    for k in range(0, iterations + 1):
 
-        if k<1: t0 = timer()
+        if k == 1:
+            t0 = timer()
 
         # this actually forms the transpose of A
         # B += numpy.transpose(A)
@@ -99,28 +102,26 @@ def main():
         B += A.T
         A += 1.0
 
-
     t1 = timer()
     trans_time = t1 - t0
 
     # ********************************************************************
     # ** Analyze and output results.
     # ********************************************************************
+    A = numpy.arange(order * order, dtype=numpy.float).reshape((order, order))
+    A = A.T * (iterations + 1.0) + (iterations + 1.0) * iterations / 2.0
+    abserr = numpy.linalg.norm(numpy.reshape(B - A, order * order), ord=1)
 
-    A = numpy.fromfunction(lambda i,j: ((iterations/2.0)+(order*j+i))*(iterations+1.0), (order,order), dtype=float)
-    abserr = numpy.linalg.norm(numpy.reshape(B-A,order*order),ord=1)
-
-    epsilon=1.e-8
-    nbytes = 2 * order**2 * 8 # 8 is not sizeof(double) in bytes, but allows for comparison to C etc.
+    epsilon = 1.e-8
+    nbytes = 2 * order ** 2 * 8  # 8 is not sizeof(double) in bytes, but allows for comparison to C etc.
     if abserr < epsilon:
         print('Solution validates')
-        avgtime = trans_time/iterations
-        print('Rate (MB/s): ',1.e-6*nbytes/avgtime, ' Avg time (s): ', avgtime)
+        avgtime = trans_time / iterations
+        print('Rate (MB/s): ', 1.e-6 * nbytes / avgtime, ' Avg time (s): ', avgtime)
     else:
-        print('error ',abserr, ' exceeds threshold ',epsilon)
+        print('error ', abserr, ' exceeds threshold ', epsilon)
         sys.exit("ERROR: solution did not validate")
 
 
 if __name__ == '__main__':
     main()
-

@@ -72,75 +72,75 @@ HISTORY: - Written by Rob Van der Wijngaart, November 2006.
 #include <par-res-kern_mpi.h>
 
 #if DOUBLE
-  #define DTYPE     double
-  #define MPI_DTYPE MPI_DOUBLE
-  #define EPSILON   1.e-8
-  #define COEFX     1.0
-  #define COEFY     1.0
-  #define FSTR      "%lf"
+#define DTYPE double
+#define MPI_DTYPE MPI_DOUBLE
+#define EPSILON 1.e-8
+#define COEFX 1.0
+#define COEFY 1.0
+#define FSTR "%lf"
 #else
-  #define DTYPE     float
-  #define MPI_DTYPE MPI_FLOAT
-  #define EPSILON   0.0001f
-  #define COEFX     1.0f
-  #define COEFY     1.0f
-  #define FSTR      "%f"
+#define DTYPE float
+#define MPI_DTYPE MPI_FLOAT
+#define EPSILON 0.0001f
+#define COEFX 1.0f
+#define COEFY 1.0f
+#define FSTR "%f"
 #endif
 
 /* define shorthand for indexing multi-dimensional arrays with offsets           */
-#define INDEXIN(i,j)  (i+RADIUS+(long)(j+RADIUS)*(long)(width+2*RADIUS))
+#define INDEXIN(i, j) (i + RADIUS + (long)(j + RADIUS) * (long)(width + 2 * RADIUS))
 /* need to add offset of RADIUS to j to account for ghost points                 */
-#define IN(i,j)       in[INDEXIN(i-istart,j-jstart)]
-#define INDEXOUT(i,j) (i+(j)*(width))
-#define OUT(i,j)      out[INDEXOUT(i-istart,j-jstart)]
-#define WEIGHT(ii,jj) weight[ii+RADIUS][jj+RADIUS]
+#define IN(i, j) in[INDEXIN(i - istart, j - jstart)]
+#define INDEXOUT(i, j) (i + (j) * (width))
+#define OUT(i, j) out[INDEXOUT(i - istart, j - jstart)]
+#define WEIGHT(ii, jj) weight[ii + RADIUS][jj + RADIUS]
 
-int main(int argc, char ** argv) {
+int main(int argc, char **argv) {
 
-  int    Num_procs;       /* number of ranks                                     */
-  int    Num_procsx, Num_procsy; /* number of ranks in each coord direction      */
-  int    my_ID;           /* MPI rank                                            */
-  int    my_IDx, my_IDy;  /* coordinates of rank in rank grid                    */
-  int    right_nbr;       /* global rank of right neighboring tile               */
-  int    left_nbr;        /* global rank of left neighboring tile                */
-  int    top_nbr;         /* global rank of top neighboring tile                 */
-  int    bottom_nbr;      /* global rank of bottom neighboring tile              */
-  DTYPE *top_buf_out;     /* communication buffer                                */
-  DTYPE *top_buf_in;      /*       "         "                                   */
-  DTYPE *bottom_buf_out;  /*       "         "                                   */
-  DTYPE *bottom_buf_in;   /*       "         "                                   */
-  DTYPE *right_buf_out;   /*       "         "                                   */
-  DTYPE *right_buf_in;    /*       "         "                                   */
-  DTYPE *left_buf_out;    /*       "         "                                   */
-  DTYPE *left_buf_in;     /*       "         "                                   */
-  int    root = 0;
-  int    n, width, height;/* linear global and local grid dimension              */
-  long   nsquare;         /* total number of grid points                         */
-  int    iter, leftover;  /* dummies                   */
-  int    istart, iend;    /* bounds of grid tile assigned to calling rank        */
-  int    jstart, jend;    /* bounds of grid tile assigned to calling rank        */
-  DTYPE  norm,            /* L1 norm of solution                                 */
-         local_norm,      /* contribution of calling rank to L1 norm             */
-         reference_norm;
-  DTYPE  f_active_points; /* interior of grid with respect to stencil            */
-  DTYPE  flops;           /* floating point ops per iteration                    */
-  int    iterations;      /* number of times to run the algorithm                */
-  double local_stencil_time,/* timing parameters                                 */
-         stencil_time,
-         avgtime;
-  int    stencil_size;    /* number of points in stencil                         */
-  DTYPE  * RESTRICT in;   /* input grid values                                   */
-  DTYPE  * RESTRICT out;  /* output grid values                                  */
-  long   total_length_in; /* total required length to store input array          */
-  long   total_length_out;/* total required length to store output array         */
-  int    error=0;         /* error flag                                          */
-  DTYPE  weight[2*RADIUS+1][2*RADIUS+1]; /* weights of points in the stencil     */
+  int Num_procs;              /* number of ranks                                     */
+  int Num_procsx, Num_procsy; /* number of ranks in each coord direction      */
+  int my_ID;                  /* MPI rank                                            */
+  int my_IDx, my_IDy;         /* coordinates of rank in rank grid                    */
+  int right_nbr;              /* global rank of right neighboring tile               */
+  int left_nbr;               /* global rank of left neighboring tile                */
+  int top_nbr;                /* global rank of top neighboring tile                 */
+  int bottom_nbr;             /* global rank of bottom neighboring tile              */
+  DTYPE *top_buf_out;         /* communication buffer                                */
+  DTYPE *top_buf_in;          /*       "         "                                   */
+  DTYPE *bottom_buf_out;      /*       "         "                                   */
+  DTYPE *bottom_buf_in;       /*       "         "                                   */
+  DTYPE *right_buf_out;       /*       "         "                                   */
+  DTYPE *right_buf_in;        /*       "         "                                   */
+  DTYPE *left_buf_out;        /*       "         "                                   */
+  DTYPE *left_buf_in;         /*       "         "                                   */
+  int root = 0;
+  int n, width, height; /* linear global and local grid dimension              */
+  long nsquare;         /* total number of grid points                         */
+  int iter, leftover;   /* dummies                   */
+  int istart, iend;     /* bounds of grid tile assigned to calling rank        */
+  int jstart, jend;     /* bounds of grid tile assigned to calling rank        */
+  DTYPE norm,           /* L1 norm of solution                                 */
+      local_norm,       /* contribution of calling rank to L1 norm             */
+      reference_norm;
+  DTYPE f_active_points;     /* interior of grid with respect to stencil            */
+  DTYPE flops;               /* floating point ops per iteration                    */
+  int iterations;            /* number of times to run the algorithm                */
+  double local_stencil_time, /* timing parameters                                 */
+      stencil_time,
+      avgtime;
+  int stencil_size;                             /* number of points in stencil                         */
+  DTYPE *RESTRICT in;                           /* input grid values                                   */
+  DTYPE *RESTRICT out;                          /* output grid values                                  */
+  long total_length_in;                         /* total required length to store input array          */
+  long total_length_out;                        /* total required length to store output array         */
+  int error = 0;                                /* error flag                                          */
+  DTYPE weight[2 * RADIUS + 1][2 * RADIUS + 1]; /* weights of points in the stencil     */
   MPI_Request request[8];
 
   /*******************************************************************************
   ** Initialize the MPI environment
   ********************************************************************************/
-  MPI_Init(&argc,&argv);
+  MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &my_ID);
   MPI_Comm_size(MPI_COMM_WORLD, &Num_procs);
 
@@ -157,25 +157,24 @@ int main(int argc, char ** argv) {
     goto ENDOFTESTS;
 #endif
 
-    if (argc != 3){
+    if (argc != 3) {
       printf("Usage: %s <# iterations> <array dimension> \n",
              *argv);
       error = 1;
       goto ENDOFTESTS;
     }
 
-    iterations  = atoi(*++argv);
-    if (iterations < 1){
-      printf("ERROR: iterations must be >= 1 : %d \n",iterations);
+    iterations = atoi(*++argv);
+    if (iterations < 1) {
+      printf("ERROR: iterations must be >= 1 : %d \n", iterations);
       error = 1;
       goto ENDOFTESTS;
     }
 
-    n       = atoi(*++argv);
-    nsquare = (long) n * (long) n;
-    if (nsquare < Num_procs){
-      printf("ERROR: grid size %ld must be at least # ranks: %d\n",
-	     nsquare, Num_procs);
+    n = atoi(*++argv);
+    nsquare = (long)n * (long)n;
+    if (nsquare < Num_procs) {
+      printf("ERROR: grid size %ld must be at least # ranks: %d\n", nsquare, Num_procs);
       error = 1;
       goto ENDOFTESTS;
     }
@@ -186,26 +185,26 @@ int main(int argc, char ** argv) {
       goto ENDOFTESTS;
     }
 
-    if (2*RADIUS +1 > n) {
+    if (2 * RADIUS + 1 > n) {
       printf("ERROR: Stencil radius %d exceeds grid size %d\n", RADIUS, n);
       error = 1;
       goto ENDOFTESTS;
     }
 
-    ENDOFTESTS:;
+  ENDOFTESTS:;
   }
   bail_out(error);
 
   /* determine best way to create a 2D grid of ranks (closest to square)     */
   factor(Num_procs, &Num_procsx, &Num_procsy);
 
-  my_IDx = my_ID%Num_procsx;
-  my_IDy = my_ID/Num_procsx;
+  my_IDx = my_ID % Num_procsx;
+  my_IDy = my_ID / Num_procsx;
   /* compute neighbors; don't worry about dropping off the edges of the grid */
-  right_nbr  = my_ID+1;
-  left_nbr   = my_ID-1;
-  top_nbr    = my_ID+Num_procsx;
-  bottom_nbr = my_ID-Num_procsx;
+  right_nbr = my_ID + 1;
+  left_nbr = my_ID - 1;
+  top_nbr = my_ID + Num_procsx;
+  bottom_nbr = my_ID - Num_procsx;
 
   if (my_ID == root) {
     printf("Number of ranks        = %d\n", Num_procs);
@@ -226,19 +225,18 @@ int main(int argc, char ** argv) {
     printf("Number of iterations   = %d\n", iterations);
   }
 
-  MPI_Bcast(&n,          1, MPI_INT, root, MPI_COMM_WORLD);
+  MPI_Bcast(&n, 1, MPI_INT, root, MPI_COMM_WORLD);
   MPI_Bcast(&iterations, 1, MPI_INT, root, MPI_COMM_WORLD);
 
   /* compute amount of space required for input and solution arrays             */
 
-  width = n/Num_procsx;
-  leftover = n%Num_procsx;
-  if (my_IDx<leftover) {
-    istart = (width+1) * my_IDx;
+  width = n / Num_procsx;
+  leftover = n % Num_procsx;
+  if (my_IDx < leftover) {
+    istart = (width + 1) * my_IDx;
     iend = istart + width;
-  }
-  else {
-    istart = (width+1) * leftover + width * (my_IDx-leftover);
+  } else {
+    istart = (width + 1) * leftover + width * (my_IDx - leftover);
     iend = istart + width - 1;
   }
 
@@ -249,14 +247,13 @@ int main(int argc, char ** argv) {
   }
   bail_out(error);
 
-  height = n/Num_procsy;
-  leftover = n%Num_procsy;
-  if (my_IDy<leftover) {
-    jstart = (height+1) * my_IDy;
+  height = n / Num_procsy;
+  leftover = n % Num_procsy;
+  if (my_IDy < leftover) {
+    jstart = (height + 1) * my_IDy;
     jend = jstart + height;
-  }
-  else {
-    jstart = (height+1) * leftover + height * (my_IDy-leftover);
+  } else {
+    jstart = (height + 1) * leftover + height * (my_IDy - leftover);
     jend = jstart + height - 1;
   }
 
@@ -268,66 +265,66 @@ int main(int argc, char ** argv) {
   bail_out(error);
 
   if (width < RADIUS || height < RADIUS) {
-    printf("ERROR: rank %d has work tile smaller then stencil radius\n",
-           my_ID);
+    printf("ERROR: rank %d has work tile smaller then stencil radius\n", my_ID);
     error = 1;
   }
   bail_out(error);
 
-  total_length_in  = (long) (width+2*RADIUS)*(long) (height+2*RADIUS)*sizeof(DTYPE);
-  total_length_out = (long) width* (long) height*sizeof(DTYPE);
+  total_length_in = (long)(width + 2 * RADIUS) * (long)(height + 2 * RADIUS) * sizeof(DTYPE);
+  total_length_out = (long)width * (long)height * sizeof(DTYPE);
 
-  in  = (DTYPE *) prk_malloc(total_length_in);
-  out = (DTYPE *) prk_malloc(total_length_out);
+  in = (DTYPE *)prk_malloc(total_length_in);
+  out = (DTYPE *)prk_malloc(total_length_out);
   if (!in || !out) {
-    printf("ERROR: rank %d could not allocate space for input/output array\n",
-            my_ID);
+    printf("ERROR: rank %d could not allocate space for input/output array\n", my_ID);
     error = 1;
   }
   bail_out(error);
 
   /* fill the stencil weights to reflect a discrete divergence operator         */
-  for (int jj=-RADIUS; jj<=RADIUS; jj++) for (int ii=-RADIUS; ii<=RADIUS; ii++)
-    WEIGHT(ii,jj) = (DTYPE) 0.0;
+  for (int jj = -RADIUS; jj <= RADIUS; jj++)
+    for (int ii = -RADIUS; ii <= RADIUS; ii++)
+      WEIGHT(ii, jj) = (DTYPE)0.0;
 
-  stencil_size = 4*RADIUS+1;
-  for (int ii=1; ii<=RADIUS; ii++) {
-    WEIGHT(0, ii) = WEIGHT( ii,0) =  (DTYPE) (1.0/(2.0*ii*RADIUS));
-    WEIGHT(0,-ii) = WEIGHT(-ii,0) = -(DTYPE) (1.0/(2.0*ii*RADIUS));
+  stencil_size = 4 * RADIUS + 1;
+  for (int ii = 1; ii <= RADIUS; ii++) {
+    WEIGHT(0, ii) = WEIGHT(ii, 0) = (DTYPE)(1.0 / (2.0 * ii * RADIUS));
+    WEIGHT(0, -ii) = WEIGHT(-ii, 0) = -(DTYPE)(1.0 / (2.0 * ii * RADIUS));
   }
 
-  norm = (DTYPE) 0.0;
-  f_active_points = (DTYPE) (n-2*RADIUS)*(DTYPE) (n-2*RADIUS);
+  norm = (DTYPE)0.0;
+  f_active_points = (DTYPE)(n - 2 * RADIUS) * (DTYPE)(n - 2 * RADIUS);
   /* intialize the input and output arrays                                     */
-  for (int j=jstart; j<=jend; j++) for (int i=istart; i<=iend; i++) {
-    IN(i,j)  = COEFX*i+COEFY*j;
-    OUT(i,j) = (DTYPE)0.0;
-  }
+  for (int j = jstart; j <= jend; j++)
+    for (int i = istart; i <= iend; i++) {
+      IN(i, j) = COEFX * i + COEFY * j;
+      OUT(i, j) = (DTYPE)0.0;
+    }
 
   if (Num_procs > 1) {
     /* allocate communication buffers for halo values                          */
-    top_buf_out = (DTYPE *) prk_malloc(4*sizeof(DTYPE)*RADIUS*width);
+    top_buf_out = (DTYPE *)prk_malloc(4 * sizeof(DTYPE) * RADIUS * width);
     if (!top_buf_out) {
       printf("ERROR: Rank %d could not allocated comm buffers for y-direction\n", my_ID);
       error = 1;
     }
     bail_out(error);
-    top_buf_in     = top_buf_out +   RADIUS*width;
-    bottom_buf_out = top_buf_out + 2*RADIUS*width;
-    bottom_buf_in  = top_buf_out + 3*RADIUS*width;
+    top_buf_in = top_buf_out + RADIUS * width;
+    bottom_buf_out = top_buf_out + 2 * RADIUS * width;
+    bottom_buf_in = top_buf_out + 3 * RADIUS * width;
 
-    right_buf_out  = (DTYPE *) prk_malloc(4*sizeof(DTYPE)*RADIUS*height);
+    right_buf_out = (DTYPE *)prk_malloc(4 * sizeof(DTYPE) * RADIUS * height);
     if (!right_buf_out) {
       printf("ERROR: Rank %d could not allocated comm buffers for x-direction\n", my_ID);
       error = 1;
     }
     bail_out(error);
-    right_buf_in   = right_buf_out +   RADIUS*height;
-    left_buf_out   = right_buf_out + 2*RADIUS*height;
-    left_buf_in    = right_buf_out + 3*RADIUS*height;
+    right_buf_in = right_buf_out + RADIUS * height;
+    left_buf_out = right_buf_out + 2 * RADIUS * height;
+    left_buf_in = right_buf_out + 3 * RADIUS * height;
   }
 
-  for (iter = 0; iter<=iterations; iter++){
+  for (iter = 0; iter <= iterations; iter++) {
 
     /* start timer after a warmup iteration */
     if (iter == 1) {
@@ -336,100 +333,114 @@ int main(int argc, char ** argv) {
     }
 
     /* need to fetch ghost point data from neighbors in y-direction                 */
-    if (my_IDy < Num_procsy-1) {
-      MPI_Irecv(top_buf_in, RADIUS*width, MPI_DTYPE, top_nbr, 101,
+    if (my_IDy < Num_procsy - 1) {
+      MPI_Irecv(top_buf_in, RADIUS * width, MPI_DTYPE, top_nbr, 101,
                 MPI_COMM_WORLD, &(request[1]));
-      for (int kk=0,j=jend-RADIUS+1; j<=jend; j++) for (int i=istart; i<=iend; i++) {
-          top_buf_out[kk++]= IN(i,j);
-      }
-      MPI_Isend(top_buf_out, RADIUS*width,MPI_DTYPE, top_nbr, 99,
+      for (int kk = 0, j = jend - RADIUS + 1; j <= jend; j++)
+        for (int i = istart; i <= iend; i++) {
+          top_buf_out[kk++] = IN(i, j);
+        }
+      MPI_Isend(top_buf_out, RADIUS * width, MPI_DTYPE, top_nbr, 99,
                 MPI_COMM_WORLD, &(request[0]));
     }
     if (my_IDy > 0) {
-      MPI_Irecv(bottom_buf_in,RADIUS*width, MPI_DTYPE, bottom_nbr, 99,
+      MPI_Irecv(bottom_buf_in, RADIUS * width, MPI_DTYPE, bottom_nbr, 99,
                 MPI_COMM_WORLD, &(request[3]));
-      for (int kk=0,j=jstart; j<=jstart+RADIUS-1; j++) for (int i=istart; i<=iend; i++) {
-          bottom_buf_out[kk++]= IN(i,j);
-      }
-      MPI_Isend(bottom_buf_out, RADIUS*width,MPI_DTYPE, bottom_nbr, 101,
+      for (int kk = 0, j = jstart; j <= jstart + RADIUS - 1; j++)
+        for (int i = istart; i <= iend; i++) {
+          bottom_buf_out[kk++] = IN(i, j);
+        }
+      MPI_Isend(bottom_buf_out, RADIUS * width, MPI_DTYPE, bottom_nbr, 101,
                 MPI_COMM_WORLD, &(request[2]));
     }
-    if (my_IDy < Num_procsy-1) {
+    if (my_IDy < Num_procsy - 1) {
       MPI_Wait(&(request[0]), MPI_STATUS_IGNORE);
       MPI_Wait(&(request[1]), MPI_STATUS_IGNORE);
-      for (int kk=0,j=jend+1; j<=jend+RADIUS; j++) for (int i=istart; i<=iend; i++) {
-          IN(i,j) = top_buf_in[kk++];
-      }
+      for (int kk = 0, j = jend + 1; j <= jend + RADIUS; j++)
+        for (int i = istart; i <= iend; i++)
+        {
+          IN(i, j) = top_buf_in[kk++];
+        }
     }
     if (my_IDy > 0) {
       MPI_Wait(&(request[2]), MPI_STATUS_IGNORE);
       MPI_Wait(&(request[3]), MPI_STATUS_IGNORE);
-      for (int kk=0,j=jstart-RADIUS; j<=jstart-1; j++) for (int i=istart; i<=iend; i++) {
-          IN(i,j) = bottom_buf_in[kk++];
-      }
+      for (int kk = 0, j = jstart - RADIUS; j <= jstart - 1; j++)
+        for (int i = istart; i <= iend; i++)
+        {
+          IN(i, j) = bottom_buf_in[kk++];
+        }
     }
 
     /* need to fetch ghost point data from neighbors in x-direction                 */
-    if (my_IDx < Num_procsx-1) {
-      MPI_Irecv(right_buf_in, RADIUS*height, MPI_DTYPE, right_nbr, 1010,
-                MPI_COMM_WORLD, &(request[1+4]));
-      for (int kk=0,j=jstart; j<=jend; j++) for (int i=iend-RADIUS+1; i<=iend; i++) {
-          right_buf_out[kk++]= IN(i,j);
-      }
-      MPI_Isend(right_buf_out, RADIUS*height, MPI_DTYPE, right_nbr, 990,
-              MPI_COMM_WORLD, &(request[0+4]));
+    if (my_IDx < Num_procsx - 1) {
+      MPI_Irecv(right_buf_in, RADIUS * height, MPI_DTYPE, right_nbr, 1010,
+                MPI_COMM_WORLD, &(request[1 + 4]));
+      for (int kk = 0, j = jstart; j <= jend; j++)
+        for (int i = iend - RADIUS + 1; i <= iend; i++) {
+          right_buf_out[kk++] = IN(i, j);
+        }
+      MPI_Isend(right_buf_out, RADIUS * height, MPI_DTYPE, right_nbr, 990,
+                MPI_COMM_WORLD, &(request[0 + 4]));
     }
     if (my_IDx > 0) {
-      MPI_Irecv(left_buf_in, RADIUS*height, MPI_DTYPE, left_nbr, 990,
-                MPI_COMM_WORLD, &(request[3+4]));
-      for (int kk=0,j=jstart; j<=jend; j++) for (int i=istart; i<=istart+RADIUS-1; i++) {
-          left_buf_out[kk++]= IN(i,j);
-      }
-      MPI_Isend(left_buf_out, RADIUS*height, MPI_DTYPE, left_nbr, 1010,
-                MPI_COMM_WORLD, &(request[2+4]));
+      MPI_Irecv(left_buf_in, RADIUS * height, MPI_DTYPE, left_nbr, 990,
+                MPI_COMM_WORLD, &(request[3 + 4]));
+      for (int kk = 0, j = jstart; j <= jend; j++)
+        for (int i = istart; i <= istart + RADIUS - 1; i++) {
+          left_buf_out[kk++] = IN(i, j);
+        }
+      MPI_Isend(left_buf_out, RADIUS * height, MPI_DTYPE, left_nbr, 1010,
+                MPI_COMM_WORLD, &(request[2 + 4]));
     }
-    if (my_IDx < Num_procsx-1) {
-      MPI_Wait(&(request[0+4]), MPI_STATUS_IGNORE);
-      MPI_Wait(&(request[1+4]), MPI_STATUS_IGNORE);
-      for (int kk=0,j=jstart; j<=jend; j++) for (int i=iend+1; i<=iend+RADIUS; i++) {
-          IN(i,j) = right_buf_in[kk++];
-      }
+    if (my_IDx < Num_procsx - 1) {
+      MPI_Wait(&(request[0 + 4]), MPI_STATUS_IGNORE);
+      MPI_Wait(&(request[1 + 4]), MPI_STATUS_IGNORE);
+      for (int kk = 0, j = jstart; j <= jend; j++)
+        for (int i = iend + 1; i <= iend + RADIUS; i++) {
+          IN(i, j) = right_buf_in[kk++];
+        }
     }
     if (my_IDx > 0) {
-      MPI_Wait(&(request[2+4]), MPI_STATUS_IGNORE);
-      MPI_Wait(&(request[3+4]), MPI_STATUS_IGNORE);
-      for (int kk=0,j=jstart; j<=jend; j++) for (int i=istart-RADIUS; i<=istart-1; i++) {
-          IN(i,j) = left_buf_in[kk++];
-      }
+      MPI_Wait(&(request[2 + 4]), MPI_STATUS_IGNORE);
+      MPI_Wait(&(request[3 + 4]), MPI_STATUS_IGNORE);
+      for (int kk = 0, j = jstart; j <= jend; j++)
+        for (int i = istart - RADIUS; i <= istart - 1; i++) {
+          IN(i, j) = left_buf_in[kk++];
+        }
     }
 
     /* Apply the stencil operator */
-    for (int j=MAX(jstart,RADIUS); j<=MIN(n-RADIUS-1,jend); j++) {
-      for (int i=MAX(istart,RADIUS); i<=MIN(n-RADIUS-1,iend); i++) {
-        #if LOOPGEN
-          #include "loop_body_star.incl"
-        #else
-          for (int jj=-RADIUS; jj<=RADIUS; jj++) OUT(i,j) += WEIGHT(0,jj)*IN(i,j+jj);
-          for (int ii=-RADIUS; ii<0; ii++)       OUT(i,j) += WEIGHT(ii,0)*IN(i+ii,j);
-          for (int ii=1; ii<=RADIUS; ii++)       OUT(i,j) += WEIGHT(ii,0)*IN(i+ii,j);
-        #endif
+    for (int j = MAX(jstart, RADIUS); j <= MIN(n - RADIUS - 1, jend); j++) {
+      for (int i = MAX(istart, RADIUS); i <= MIN(n - RADIUS - 1, iend); i++) {
+#if LOOPGEN
+#include "loop_body_star.incl"
+#else
+        for (int jj = -RADIUS; jj <= RADIUS; jj++)
+          OUT(i, j) += WEIGHT(0, jj) * IN(i, j + jj);
+        for (int ii = -RADIUS; ii <= RADIUS; ii++)
+          OUT(i, j) += WEIGHT(ii, 0) * IN(i + ii, j);
+        for (int ii = 1; ii <= RADIUS; ii++)
+          OUT(i, j) += WEIGHT(ii, 0) * IN(i + ii, j);
+#endif
       }
     }
 
     /* add constant to solution to force refresh of neighbor data, if any */
-    for (int j=jstart; j<=jend; j++) for (int i=istart; i<=iend; i++) IN(i,j)+= 1.0;
+    for (int j = jstart; j <= jend; j++)
+      for (int i = istart; i <= iend; i++)
+        IN(i, j) += 1.0;
 
   } /* end of iterations                                                   */
 
   local_stencil_time = wtime() - local_stencil_time;
-  MPI_Reduce(&local_stencil_time, &stencil_time, 1, MPI_DOUBLE, MPI_MAX, root,
-             MPI_COMM_WORLD);
+  MPI_Reduce(&local_stencil_time, &stencil_time, 1, MPI_DOUBLE, MPI_MAX, root, MPI_COMM_WORLD);
 
   /* compute L1 norm in parallel                                                */
-  local_norm = (DTYPE) 0.0;
-  for (int j=MAX(jstart,RADIUS); j<=MIN(n-RADIUS-1,jend); j++) {
-    for (int i=MAX(istart,RADIUS); i<=MIN(n-RADIUS-1,iend); i++) {
-      local_norm += (DTYPE)ABS(OUT(i,j));
+  local_norm = (DTYPE)0.0;
+  for (int j = MAX(jstart, RADIUS); j <= MIN(n - RADIUS - 1, jend); j++) {
+    for (int i = MAX(istart, RADIUS); i <= MIN(n - RADIUS - 1, iend); i++) {
+      local_norm += (DTYPE)ABS(OUT(i, j));
     }
   }
 
@@ -439,24 +450,22 @@ int main(int argc, char ** argv) {
   ** Analyze and output results.
   ********************************************************************************/
 
-/* verify correctness                                                            */
+  /* verify correctness                                                            */
   if (my_ID == root) {
     norm /= f_active_points;
     if (RADIUS > 0) {
-      reference_norm = (DTYPE) (iterations+1) * (COEFX + COEFY);
+      reference_norm = (DTYPE)(iterations + 1) * (COEFX + COEFY);
+    } else {
+      reference_norm = (DTYPE)0.0;
     }
-    else {
-      reference_norm = (DTYPE) 0.0;
-    }
-    if (ABS(norm-reference_norm) > EPSILON) {
-      printf("ERROR: L1 norm = "FSTR", Reference L1 norm = "FSTR"\n",
+    if (ABS(norm - reference_norm) > EPSILON) {
+      printf("ERROR: L1 norm = " FSTR ", Reference L1 norm = " FSTR "\n",
              norm, reference_norm);
       error = 1;
-    }
-    else {
+    } else {
       printf("Solution validates\n");
 #if VERBOSE
-      printf("Reference L1 norm = "FSTR", L1 norm = "FSTR"\n",
+      printf("Reference L1 norm = " FSTR ", L1 norm = " FSTR "\n",
              reference_norm, norm);
 #endif
     }
@@ -466,10 +475,10 @@ int main(int argc, char ** argv) {
   if (my_ID == root) {
     /* flops/stencil: 2 flops (fma) for each point in the stencil,
        plus one flop for the update of the input of the array        */
-    flops = (DTYPE) (2*stencil_size+1) * f_active_points;
-    avgtime = stencil_time/iterations;
-    printf("Rate (MFlops/s): "FSTR"  Avg time (s): %lf\n",
-           1.0E-06 * flops/avgtime, avgtime);
+    flops = (DTYPE)(2 * stencil_size + 1) * f_active_points;
+    avgtime = stencil_time / iterations;
+    printf("Rate (MFlops/s): " FSTR "  Avg time (s): %lf\n",
+           1.0E-06 * flops / avgtime, avgtime);
   }
 
   MPI_Finalize();

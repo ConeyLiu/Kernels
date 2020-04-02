@@ -56,19 +56,20 @@
 # *******************************************************************
 
 import sys
-print('Python version = ', str(sys.version_info.major)+'.'+str(sys.version_info.minor))
+
+print('Python version = ', str(sys.version_info.major) + '.' + str(sys.version_info.minor))
 if sys.version_info >= (3, 3):
     from time import process_time as timer
 else:
     from timeit import default_timer as timer
 
-def main():
 
+def main():
     # ********************************************************************
     # read and test input parameters
     # ********************************************************************
 
-    print('Parallel Research Kernels version ') #, PRKVERSION
+    print('Parallel Research Kernels version ')  # , PRKVERSION
     print('Python stencil execution on 2D grid')
 
     if len(sys.argv) < 3:
@@ -92,10 +93,10 @@ def main():
         r = int(sys.argv[4])
         if r < 1:
             sys.exit("ERROR: Stencil radius should be positive")
-        if (2*r+1) > n:
+        if (2 * r + 1) > n:
             sys.exit("ERROR: Stencil radius exceeds grid size")
     else:
-        r = 2 # radius=2 is what other impls use right now
+        r = 2  # radius=2 is what other impls use right now
 
     print('Grid size            = ', n)
     print('Radius of stencil    = ', r)
@@ -108,56 +109,56 @@ def main():
     print('Compact representation of stencil loop body')
     print('Number of iterations = ', iterations)
 
-    W = [[0.0 for x in range(2*r+1)] for x in range(2*r+1)]
+    W = [[0.0 for x in range(2 * r + 1)] for x in range(2 * r + 1)]
     if pattern == 'star':
-        stencil_size = 4*r+1
-        for i in range(1,r+1):
-            W[r][r+i] = +1./(2*i*r)
-            W[r+i][r] = +1./(2*i*r)
-            W[r][r-i] = -1./(2*i*r)
-            W[r-i][r] = -1./(2*i*r)
+        stencil_size = 4 * r + 1
+        for i in range(1, r + 1):
+            W[r][r + i] = +1. / (2 * i * r)
+            W[r + i][r] = +1. / (2 * i * r)
+            W[r][r - i] = -1. / (2 * i * r)
+            W[r - i][r] = -1. / (2 * i * r)
 
     else:
-        stencil_size = (2*r+1)**2
-        for j in range(1,r+1):
-            for i in range(-j+1,j):
-                W[r+i][r+j] = +1./(4*j*(2*j-1)*r)
-                W[r+i][r-j] = -1./(4*j*(2*j-1)*r)
-                W[r+j][r+i] = +1./(4*j*(2*j-1)*r)
-                W[r-j][r+i] = -1./(4*j*(2*j-1)*r)
+        stencil_size = (2 * r + 1) ** 2
+        for j in range(1, r + 1):
+            for i in range(-j + 1, j):
+                W[r + i][r + j] = +1. / (4 * j * (2 * j - 1) * r)
+                W[r + i][r - j] = -1. / (4 * j * (2 * j - 1) * r)
+                W[r + j][r + i] = +1. / (4 * j * (2 * j - 1) * r)
+                W[r - j][r + i] = -1. / (4 * j * (2 * j - 1) * r)
 
-            W[r+j][r+j]    = +1./(4*j*r)
-            W[r-j][r-j]    = -1./(4*j*r)
+            W[r + j][r + j] = +1. / (4 * j * r)
+            W[r - j][r - j] = -1. / (4 * j * r)
 
     A = [[0.0 for x in range(n)] for x in range(n)]
     for i in range(n):
         for j in range(n):
-            A[i][j] = float(i+j)
+            A[i][j] = float(i + j)
 
     B = [[0.0 for x in range(n)] for x in range(n)]
-    for i in range(r,n-r):
-        for j in range(r,n-r):
+    for i in range(r, n - r):
+        for j in range(r, n - r):
             B[i][j] = 0.0
 
-    for k in range(iterations+1):
+    for k in range(iterations + 1):
         # start timer after a warmup iteration
-        if k<1: t0 = timer()
+        if k == 1: t0 = timer()
 
         if pattern == 'star':
-            for i in range(r,n-r):
-                for j in range(r,n-r):
-                    for jj in range(-r,r+1):
-                        B[i][j] += W[r][r+jj] * A[i][j+jj]
-                    for ii in range(-r,0):
-                        B[i][j] += W[r+ii][r] * A[i+ii][j]
-                    for ii in range(1,r+1):
-                        B[i][j] += W[r+ii][r] * A[i+ii][j]
+            for i in range(r, n - r):
+                for j in range(r, n - r):
+                    for jj in range(-r, r + 1):
+                        B[i][j] += W[r][r + jj] * A[i][j + jj]
+                    for ii in range(-r, 0):
+                        B[i][j] += W[r + ii][r] * A[i + ii][j]
+                    for ii in range(1, r + 1):
+                        B[i][j] += W[r + ii][r] * A[i + ii][j]
         else:
-            for i in range(r,n-r):
-                for j in range(r,n-r):
-                    for ii in range(-r,r+1):
-                        for jj in range(-r,r+1):
-                            B[i][j] += W[r+ii][r+jj] * A[i+ii][j+jj]
+            for i in range(r, n - r):
+                for j in range(r, n - r):
+                    for ii in range(-r, r + 1):
+                        for jj in range(-r, r + 1):
+                            B[i][j] += W[r + ii][r + jj] * A[i + ii][j + jj]
 
         for i in range(n):
             for j in range(n):
@@ -166,32 +167,31 @@ def main():
     t1 = timer()
     stencil_time = t1 - t0
 
-    #******************************************************************************
-    #* Analyze and output results.
-    #******************************************************************************
+    # ******************************************************************************
+    # * Analyze and output results.
+    # ******************************************************************************
 
     norm = 0.0
     for i in range(n):
         for j in range(n):
             norm += abs(B[i][j])
 
-    active_points = (n-2*r)**2
+    active_points = (n - 2 * r) ** 2
     norm /= active_points
 
-    epsilon=1.e-8
+    epsilon = 1.e-8
 
     # verify correctness
-    reference_norm = 2*(iterations+1)
-    if abs(norm-reference_norm) < epsilon:
+    reference_norm = 2 * (iterations + 1)
+    if abs(norm - reference_norm) < epsilon:
         print('Solution validates')
-        flops = (2*stencil_size+1) * active_points
-        avgtime = stencil_time/iterations
-        print('Rate (MFlops/s): ',1.e-6*flops/avgtime, ' Avg time (s): ',avgtime)
+        flops = (2 * stencil_size + 1) * active_points
+        avgtime = stencil_time / iterations
+        print('Rate (MFlops/s): ', 1.e-6 * flops / avgtime, ' Avg time (s): ', avgtime)
     else:
-        print('ERROR: L1 norm = ', norm,' Reference L1 norm = ', reference_norm)
+        print('ERROR: L1 norm = ', norm, ' Reference L1 norm = ', reference_norm)
         sys.exit()
 
 
 if __name__ == '__main__':
     main()
-

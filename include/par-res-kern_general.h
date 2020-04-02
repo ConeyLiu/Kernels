@@ -53,36 +53,36 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #define PRKVERSION "2.17"
 #ifndef MIN
-#define MIN(x,y) ((x)<(y)?(x):(y))
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
 #endif
 #ifndef MAX
-#define MAX(x,y) ((x)>(y)?(x):(y))
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
 #endif
 #ifndef ABS
 #define ABS(a) ((a) >= 0 ? (a) : -(a))
 #endif
 
 #if RESTRICT_KEYWORD
-  #ifdef __GNUC__
-    #define RESTRICT __restrict__
-  #else
-    #define RESTRICT restrict
-  #endif
+#ifdef __GNUC__
+#define RESTRICT __restrict__
 #else
-  #define RESTRICT
+#define RESTRICT restrict
+#endif
+#else
+#define RESTRICT
 #endif
 
 /* Define 64-bit types and corresponding format strings for printf() */
 #ifdef LONG_IS_64BITS
-  typedef unsigned long      u64Int;
-  typedef long               s64Int;
-  #define FSTR64             "%16ld"
-  #define FSTR64U            "%16lu"
+typedef unsigned long u64Int;
+typedef long s64Int;
+#define FSTR64 "%16ld"
+#define FSTR64U "%16lu"
 #else
-  typedef unsigned long long u64Int;
-  typedef long long          s64Int;
-  #define FSTR64             "%16ll"
-  #define FSTR64U            "%16llu"
+typedef unsigned long long u64Int;
+typedef long long s64Int;
+#define FSTR64 "%16ll"
+#define FSTR64U "%16llu"
 #endif
 
 extern double wtime(void);
@@ -97,16 +97,17 @@ extern double wtime(void);
  * we need it when calling prk_shmem_align(..)           */
 static inline int prk_get_alignment(void)
 {
-    /* a := alignment */
-# ifdef PRK_ALIGNMENT
-    int a = PRK_ALIGNMENT;
-# else
-    char* temp = getenv("PRK_ALIGNMENT");
-    int a = (temp!=NULL) ? atoi(temp) : 64;
-    if (a < 8) a = 8;
-    assert( (a & (~a+1)) == a );
+  /* a := alignment */
+#ifdef PRK_ALIGNMENT
+  int a = PRK_ALIGNMENT;
+#else
+  char *temp = getenv("PRK_ALIGNMENT");
+  int a = (temp != NULL) ? atoi(temp) : 64;
+  if (a < 8)
+    a = 8;
+  assert((a & (~a + 1)) == a);
 #endif
-    return a;
+  return a;
 }
 
 /* There are a variety of reasons why this function is not declared by stdlib.h. */
@@ -114,17 +115,16 @@ static inline int prk_get_alignment(void)
 int posix_memalign(void **memptr, size_t alignment, size_t size);
 #endif
 
-static inline void* prk_malloc(size_t bytes)
-{
+static inline void *prk_malloc(size_t bytes) {
 #ifndef PRK_USE_MALLOC
-    int alignment = prk_get_alignment();
+  int alignment = prk_get_alignment();
 #endif
 
 /* Berkeley UPC throws warnings related to this function for no obvious reason... */
 #if !defined(__UPC__) && defined(__INTEL_COMPILER) && !defined(PRK_USE_POSIX_MEMALIGN)
-    return (void*)_mm_malloc(bytes,alignment);
+  return (void *)_mm_malloc(bytes, alignment);
 #elif defined(PRK_HAS_C11)
-/* From ISO C11:
+  /* From ISO C11:
  *
  * "The aligned_alloc function allocates space for an object
  *  whose alignment is specified by alignment, whose size is
@@ -136,38 +136,39 @@ static inline void* prk_malloc(size_t bytes)
  *  Thus, if we do not round up the bytes to be a multiple
  *  of the alignment, we violate ISO C.
  */
-    size_t padded = bytes;
-    size_t excess = bytes % alignment;
-    if (excess>0) padded += (alignment - excess);
-    return aligned_alloc(alignment,padded);
+  size_t padded = bytes;
+  size_t excess = bytes % alignment;
+  if (excess > 0)
+    padded += (alignment - excess);
+  return aligned_alloc(alignment, padded);
 #elif defined(PRK_USE_MALLOC)
 #warning PRK_USE_MALLOC prevents the use of alignmed memory.
-    return prk_malloc(bytes);
+  return prk_malloc(bytes);
 #else /* if defined(PRK_USE_POSIX_MEMALIGN) */
-    void * ptr = NULL;
-    int ret;
-    ret = posix_memalign(&ptr,alignment,bytes);
-    if (ret) ptr = NULL;
-    return ptr;
+  void *ptr = NULL;
+  int ret;
+  ret = posix_memalign(&ptr, alignment, bytes);
+  if (ret)
+    ptr = NULL;
+  return ptr;
 #endif
 }
 
-static inline void prk_free(void* p)
-{
+static inline void prk_free(void *p) {
 #if !defined(__UPC__) && defined(__INTEL_COMPILER) && !defined(PRK_USE_POSIX_MEMALIGN)
-    _mm_free(p);
+  _mm_free(p);
 #else
-    free(p);
+  free(p);
 #endif
 }
 
 /* dt is the time interval in seconds that you want to waste */
-static inline void prk_pause(double dt)
-{
+static inline void prk_pause(double dt) {
   double t0 = wtime();
   while (1) {
     double t1 = wtime();
-    if ((t1-t0)>dt) return;
+    if ((t1 - t0) > dt)
+      return;
   }
   return;
 }
@@ -175,32 +176,38 @@ static inline void prk_pause(double dt)
 /* find factorization of an integer into two factors that are as close together as 
    possible. If not the same, second factor is the largest                               */
 static inline void factor(int r, int *fac1, int *fac2) {
-  for (*fac1=(int) (sqrt(r+1.0)); *fac1>0; (*fac1)--) {
-    if (!(r%(*fac1))) { *fac2 = r/(*fac1); break;}
+  for (*fac1 = (int)(sqrt(r + 1.0)); *fac1 > 0; (*fac1)--) {
+    if (!(r % (*fac1))) {
+      *fac2 = r / (*fac1);
+      break;
+    }
   }
 }
 
 /* find optimal division of a pair of integers whose sum is fixed, such that the pair 
    is as close as possible to an input pair, but whose two-term factorizations have 
    minimal maximum aspect ratios                                                         */
-static inline void optimize_split(int *r_in0, int *r_in1, float lb_weight){
+static inline void optimize_split(int *r_in0, int *r_in1, float lb_weight) {
   int r[2], fac[2][2], delta, r_opt[2], i;
   float max_aspect, imbalance, cost, cost_opt;
-    
-  cost_opt=INT_MAX;
-  for (delta=-MIN((*r_in0),(*r_in1))+1; delta<MIN((*r_in0),(*r_in1)); delta++) {
-    r[0]=(*r_in0-delta); r[1] = (*r_in1)+delta;
-    for (i=0; i<2; i++) factor(r[i], &fac[i][0], &fac[i][1]);
-    max_aspect=1.0-1.0/MAX((float)fac[0][1]/(float)fac[0][0],(float)fac[1][1]/(float)fac[1][0]);
-    imbalance=MAX(1.0-(float)r[1]/(float)(*r_in1),1.0-(float)r[0]/(float)(*r_in0));
-    cost = imbalance*lb_weight + max_aspect;
-    if (cost<cost_opt) {
+
+  cost_opt = INT_MAX;
+  for (delta = -MIN((*r_in0), (*r_in1)) + 1; delta < MIN((*r_in0), (*r_in1)); delta++) {
+    r[0] = (*r_in0 - delta);
+    r[1] = (*r_in1) + delta;
+    for (i = 0; i < 2; i++)
+      factor(r[i], &fac[i][0], &fac[i][1]);
+    max_aspect = 1.0 - 1.0 / MAX((float)fac[0][1] / (float)fac[0][0], (float)fac[1][1] / (float)fac[1][0]);
+    imbalance = MAX(1.0 - (float)r[1] / (float)(*r_in1), 1.0 - (float)r[0] / (float)(*r_in0));
+    cost = imbalance * lb_weight + max_aspect;
+    if (cost < cost_opt) {
       cost_opt = cost;
-      for (i=0; i<2; i++) r_opt[i] = r[i];
+      for (i = 0; i < 2; i++)
+        r_opt[i] = r[i];
     }
   }
   *r_in0 = r_opt[0];
   *r_in1 = r_opt[1];
 }
-  
+
 #endif /* PRK_GENERAL_H */
