@@ -126,9 +126,10 @@ class TransposeExecutor:
         self._handlers = handlers
 
     def transpose(self, iteration_index):
-        if self._phases == 1:
-            self._iteration_start = time.time()
+        if not self._iteration_index:
             self._iteration_index = iteration_index
+        if self._phases == 1 and not self._iteration_start:
+            self._iteration_start = time.time()
 
             start = self._index_start
             end = start + self._block_order
@@ -144,6 +145,9 @@ class TransposeExecutor:
         self._ma[start: end, :] += 1.0
 
     def receive(self, from_index, data):
+        # the receive method can be call before than transpose
+        if self._phases == 1 and not self._iteration_start:
+            self._iteration_start = time.time()
         start = from_index * self._block_order
         end = start + self._block_order
         self._mb[start: end, ] += data.T
